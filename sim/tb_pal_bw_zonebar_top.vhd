@@ -2,37 +2,40 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
--- Testbench for pal_bw_zonebar_top
+-- Testbench for pal_bw_zonebar_top (vertical + horizontal orientation)
 --
--- Mirrors the DUT's zone layout (8 zones x 65 px, STRIPE_W=4) and checks the
--- first active line pixel-by-pixel, plus DAC level validity everywhere.
+-- Two DUT instances run in parallel so both directions are verified inside the
+-- first frame (fast):
+--   uut_v : orient='0' VERTICAL   - checked pixel-by-pixel over one active line
+--   uut_h : orient='1' HORIZONTAL - checked line-by-line over the first 150
+--                                   active lines (covers zones 0,1 and into 2)
 --
--- DUT default pattern, left -> right:
---   zone 0 STRIPE, 1 WHITE, 2 STRIPE, 3 WHITE, 4 BLACK, 5 STRIPE, 6 WHITE, 7 STRIPE
+-- Default pattern (8 zones): STRIPE, WHITE, STRIPE, WHITE, BLACK, STRIPE, WHITE, STRIPE
+--   vertical   zone width  = 65 px
+--   horizontal zone height = 72 lines
 --
--- NOTE on sampling: active_o is combinational from h_cnt, so it rises one delta
--- after the clock edge that opens the active window.  dac_out is already valid
--- for pixel 0 at that point, so the checker samples pixel 0 BEFORE waiting for
--- the next clock edge, then advances one pixel per clock.  (Sampling after the
--- first clock edge would skip pixel 0 and shift every check by one.)
+-- Sampling note: dac_out is combinational off h_cnt, so checkers sample on the
+-- falling edge (stable mid-pixel) to avoid the read/clock delta race.
 entity tb_pal_bw_zonebar_top is
 end entity tb_pal_bw_zonebar_top;
 
 architecture sim of tb_pal_bw_zonebar_top is
 
-  signal clk      : std_logic := '0';
-  signal rst      : std_logic := '1';
-  signal dac_out  : std_logic_vector(3 downto 0);
-  signal hsync_o  : std_logic;
-  signal vsync_o  : std_logic;
-  signal active_o : std_logic;
+  signal clk : std_logic := '0';
+  signal rst : std_logic := '1';
+
+  signal dac_v, dac_h         : std_logic_vector(3 downto 0);
+  signal hs_v, vs_v, act_v    : std_logic;
+  signal hs_h, vs_h, act_h    : std_logic;
 
   constant CLK_PERIOD : time := 100 ns;  -- 10 MHz (CLK_MHZ=10 for sim speed)
 
   -- Mirror of the DUT zone layout
   constant NUM_ZONES : integer := 8;
-  constant ZONE_W    : integer := 65;
+  constant ZONE_W    : integer := 65;   -- px per vertical zone
+  constant ZONE_H    : integer := 72;   -- lines per horizontal zone
   constant STRIPE_W  : integer := 4;
+  constant NLINES_H  : integer := 150;  -- horizontal active lines to check
 
   constant BLACK : std_logic_vector(3 downto 0) := "0100";
   constant WHITE : std_logic_vector(3 downto 0) := "1111";
@@ -44,39 +47,40 @@ architecture sim of tb_pal_bw_zonebar_top is
     4 => Z_BLACK,  5 => Z_STRIPE, 6 => Z_WHITE,  7 => Z_STRIPE
   );
 
-  -- Expected DAC value for active pixel px (0..519)
-  function expected_px(px : integer) return std_logic_vector is
-    variable zone  : integer;
-    variable local : integer;
+  -- Expected DAC value at zone offset 'local' for a given zone kind
+  function zone_color(z : integer; local : integer) return std_logic_vector is
   begin
-    zone  := px / ZONE_W;
-    local := px mod ZONE_W;
-    case ZONE_TABLE(zone) is
+    case ZONE_TABLE(z) is
       when Z_BLACK  => return BLACK;
       when Z_WHITE  => return WHITE;
       when Z_STRIPE =>
-        if (local / STRIPE_W) mod 2 = 0 then
-          return BLACK;            -- each stripe zone starts black
-        else
-          return WHITE;
-        end if;
+        if (local / STRIPE_W) mod 2 = 0 then return BLACK; else return WHITE; end if;
     end case;
+  end function;
+
+  function expected_px(px : integer) return std_logic_vector is
+  begin
+    return zone_color(px / ZONE_W, px mod ZONE_W);
+  end function;
+
+  function expected_line(ln : integer) return std_logic_vector is
+  begin
+    return zone_color(ln / ZONE_H, ln mod ZONE_H);
   end function;
 
 begin
 
   clk <= not clk after CLK_PERIOD / 2;
 
-  uut : entity work.pal_bw_zonebar_top
+  uut_v : entity work.pal_bw_zonebar_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
-    port map (
-      clk      => clk,
-      rst      => rst,
-      dac_out  => dac_out,
-      hsync_o  => hsync_o,
-      vsync_o  => vsync_o,
-      active_o => active_o
-    );
+    port map (clk => clk, rst => rst, orient => '0',
+              dac_out => dac_v, hsync_o => hs_v, vsync_o => vs_v, active_o => act_v);
+
+  uut_h : entity work.pal_bw_zonebar_top
+    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
+    port map (clk => clk, rst => rst, orient => '1',
+              dac_out => dac_h, hsync_o => hs_h, vsync_o => vs_h, active_o => act_h);
 
   -- -----------------------------------------------------------------------
   -- Stimulus
@@ -87,68 +91,87 @@ begin
     wait for 5 * CLK_PERIOD;
     rst <= '0';
 
-    -- Run 35 lines (vsync 5 + vback 20 + ~10 active lines)
-    wait for 35 * 640 * CLK_PERIOD;
+    -- Enough for vertical (1 line) + horizontal (~175 lines into frame 0)
+    wait for 200 * 640 * CLK_PERIOD;
 
     report "=== Simulation complete ===" severity note;
     std.env.finish;
   end process;
 
   -- -----------------------------------------------------------------------
-  -- Checker 1: DAC level validity (runs every clock)
+  -- Checker A: DAC level validity on both instances (every clock)
   -- -----------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) and rst = '0' then
-      if hsync_o = '1' or vsync_o = '1' then
-        assert dac_out = "0000"
-          report "FAIL: sync region bad value " &
-                 integer'image(to_integer(unsigned(dac_out))) severity error;
+      if (hs_v = '1' or vs_v = '1') then
+        assert dac_v = "0000" report "FAIL V: sync level" severity error;
       end if;
-      if active_o = '0' and hsync_o = '0' and vsync_o = '0' then
-        assert dac_out = "0100"
-          report "FAIL: blanking region bad value " &
-                 integer'image(to_integer(unsigned(dac_out))) severity error;
+      if (act_v = '0' and hs_v = '0' and vs_v = '0') then
+        assert dac_v = "0100" report "FAIL V: blank level" severity error;
       end if;
-      if active_o = '1' then
-        assert dac_out = "1111" or dac_out = "0100"
-          report "FAIL: active region invalid value " &
-                 integer'image(to_integer(unsigned(dac_out))) severity error;
+      if act_v = '1' then
+        assert dac_v = "1111" or dac_v = "0100" report "FAIL V: active level" severity error;
+      end if;
+      if act_h = '1' then
+        assert dac_h = "1111" or dac_h = "0100" report "FAIL H: active level" severity error;
       end if;
     end if;
   end process;
 
   -- -----------------------------------------------------------------------
-  -- Checker 2: pixel-exact zone pattern over the first active line
+  -- Checker B: VERTICAL pixel-exact over the first active line
   -- -----------------------------------------------------------------------
   process
     variable px  : integer;
     variable exp : std_logic_vector(3 downto 0);
   begin
     wait until rst = '0';
-    wait until rising_edge(active_o);   -- enter first active line (pixel 0 period)
+    wait until rising_edge(act_v);   -- enter first active line (pixel 0 period)
 
-    -- Sample on the falling edge: dac_out is stable mid-pixel, avoiding the
-    -- read/clock race that occurs when sampling on the rising edge.
     px := 0;
     loop
       wait until falling_edge(clk);
-      exit when active_o = '0';
+      exit when act_v = '0';
       exp := expected_px(px);
-      assert dac_out = exp
-        report "FAIL zonebar: px=" & integer'image(px) &
+      assert dac_v = exp
+        report "FAIL vert: px=" & integer'image(px) &
                " zone=" & integer'image(px / ZONE_W) &
                " exp=" & integer'image(to_integer(unsigned(exp))) &
-               " got=" & integer'image(to_integer(unsigned(dac_out)))
+               " got=" & integer'image(to_integer(unsigned(dac_v)))
         severity error;
       px := px + 1;
     end loop;
 
-    report "First active line sampled: " & integer'image(px) & " pixels" severity note;
     assert px = 520
-      report "FAIL: expected 520 active pixels, saw " & integer'image(px)
-      severity error;
-    report "=== Zone-bar pattern check PASSED ===" severity note;
+      report "FAIL vert: expected 520 pixels, saw " & integer'image(px) severity error;
+    report "=== VERTICAL check PASSED (" & integer'image(px) & " px) ===" severity note;
+    wait;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Checker C: HORIZONTAL line-by-line over the first NLINES_H active lines
+  -- -----------------------------------------------------------------------
+  process
+    variable exp : std_logic_vector(3 downto 0);
+  begin
+    wait until rst = '0';
+    wait until falling_edge(vs_h);   -- end of frame's vsync -> vback, then active
+
+    for ln in 0 to NLINES_H - 1 loop
+      wait until rising_edge(act_h);   -- start of active line 'ln'
+      wait until falling_edge(clk);    -- sample within the active line
+      exp := expected_line(ln);
+      assert dac_h = exp
+        report "FAIL horiz: line=" & integer'image(ln) &
+               " zone=" & integer'image(ln / ZONE_H) &
+               " exp=" & integer'image(to_integer(unsigned(exp))) &
+               " got=" & integer'image(to_integer(unsigned(dac_h)))
+        severity error;
+    end loop;
+
+    report "=== HORIZONTAL check PASSED (" & integer'image(NLINES_H) &
+           " lines) ===" severity note;
     wait;
   end process;
 
