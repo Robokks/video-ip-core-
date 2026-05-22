@@ -1,25 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   LabVIEW FPGA CLIP Descriptor -- PAL B/W Stripe Test (NO BRAM)
+  Revision 3: runtime stripe_width and stripe_dir controls.
   Target  : NI cRIO-9056  (Artix-7 XC7A75T)
-  LabVIEW : 2019 SP1 or later with FPGA Module
 
-  Steps to load in LabVIEW FPGA:
-    1. Project Explorer -> FPGA Target
-       Right-click -> New -> Component-Level IP
-    2. Browse to this file
-    3. Place CLIP node inside Single-Cycle Timed Loop at 40 MHz
-    4. Wire rst -> FALSE
-    5. Wire dac_out[3:0] -> Mod1/DIO0, DIO1, DIO2, DIO3  (NI-9401)
+  LabVIEW wiring:
+    rst          -> FALSE  (or Boolean control)
+    stripe_width -> U16 numeric control  (pixels or lines per stripe)
+    stripe_dir   -> Boolean control      (FALSE=vertical, TRUE=horizontal)
+    dac_out      -> unbundle -> Mod1/DIO0..DIO3  (NI-9401)
 -->
 <CLIPDeclaration>
 
   <Name>PAL_BW_Stripe_Test</Name>
   <GUID>{B7D3A2F1-4C8E-4A02-95B3-2D7F6E1C3A09}</GUID>
-  <Version>2.0</Version>
-  <Description>PAL black-and-white stripe pattern generator. No BRAM needed. Outputs alternating black/white vertical stripes with correct PAL sync. Use for NI-9401 wiring checks and hardware bring-up.</Description>
+  <Version>3.0</Version>
+  <Description>PAL B/W stripe pattern generator. No BRAM. Stripe width and direction (horizontal/vertical) controllable at runtime from LabVIEW.</Description>
 
-  <!-- HDL source files: dependencies first, top-level last -->
   <HDLFileList>
     <HDLFile isTopLevelFile="false">
       <FileName>pal_timing.vhd</FileName>
@@ -41,7 +38,6 @@
 
   <SignalList>
 
-    <!-- Clock: tied to SCTL clock automatically by LabVIEW -->
     <CLIPSignal>
       <Name>clk</Name>
       <DataType>Clock</DataType>
@@ -49,15 +45,29 @@
       <ClockFrequencyInHz>40000000</ClockFrequencyInHz>
     </CLIPSignal>
 
-    <!-- Reset: wire to FALSE constant in LabVIEW diagram -->
     <CLIPSignal>
       <Name>rst</Name>
       <DataType>Boolean</DataType>
       <Direction>ToCLIP</Direction>
     </CLIPSignal>
 
-    <!-- 4-bit DAC output: wire each bit to NI-9401 DIO0-DIO3 -->
-    <!-- dac_out[3]=DIO0(MSB)  dac_out[2]=DIO1  dac_out[1]=DIO2  dac_out[0]=DIO3(LSB) -->
+    <!-- Stripe width: number of pixels (vertical) or lines (horizontal) per stripe -->
+    <!-- Wire to a U16 numeric control on front panel. Default value: 40 -->
+    <CLIPSignal>
+      <Name>stripe_width</Name>
+      <DataType>U16</DataType>
+      <NumberOfBits>16</NumberOfBits>
+      <Direction>ToCLIP</Direction>
+    </CLIPSignal>
+
+    <!-- Stripe direction: FALSE=vertical stripes, TRUE=horizontal stripes -->
+    <CLIPSignal>
+      <Name>stripe_dir</Name>
+      <DataType>Boolean</DataType>
+      <Direction>ToCLIP</Direction>
+    </CLIPSignal>
+
+    <!-- 4-bit DAC output: bit3->DIO0  bit2->DIO1  bit1->DIO2  bit0->DIO3 -->
     <CLIPSignal>
       <Name>dac_out</Name>
       <DataType>U8</DataType>
@@ -65,7 +75,6 @@
       <Direction>FromCLIP</Direction>
     </CLIPSignal>
 
-    <!-- Debug outputs (optional: wire to front panel indicators) -->
     <CLIPSignal>
       <Name>hsync_o</Name>
       <DataType>Boolean</DataType>
