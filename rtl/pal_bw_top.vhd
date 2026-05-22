@@ -3,9 +3,11 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 -- PAL Black-and-White Composite Video IP Core
--- Clock  : 10 MHz (100 ns period)
+-- Clock  : 10 / 20 / 30 / 40 MHz selected via CLK_MHZ generic
 -- Output : 4-bit DAC bus (drive an R-2R ladder or TLC7524 to get analog video)
 -- Input  : single-port BRAM with 1-bit pixel data (1=white, 0=black)
+-- The effective pixel rate is always 10 MHz; CLK_MHZ only selects the
+-- input clock source.  All PAL timing and BRAM addressing are unchanged.
 --
 -- BRAM addressing: linear, row-major
 --   address = (line * H_ACTIVE) + pixel_x
@@ -36,10 +38,16 @@ entity pal_bw_top is
     -- 4-bit DAC levels
     LEVEL_SYNC  : std_logic_vector(3 downto 0) := "0000";
     LEVEL_BLANK : std_logic_vector(3 downto 0) := "0100";
-    LEVEL_WHITE : std_logic_vector(3 downto 0) := "1111"
+    LEVEL_WHITE : std_logic_vector(3 downto 0) := "1111";
+    -- Input clock selection: 10, 20, 30, or 40 (MHz)
+    -- 10 -> no division   (10 MHz clock input, e.g. cRIO-9056 10 MHz base)
+    -- 20 -> divide by 2   (20 MHz clock input)
+    -- 30 -> divide by 3   (30 MHz clock input)
+    -- 40 -> divide by 4   (40 MHz primary clock, e.g. cRIO-9056 default)
+    CLK_MHZ     : integer := 10
   );
   port (
-    clk       : in  std_logic;   -- 10 MHz pixel clock
+    clk       : in  std_logic;   -- input clock: 10 / 20 / 30 / 40 MHz (set CLK_MHZ)
     rst       : in  std_logic;   -- synchronous reset, active-high
 
     -- BRAM interface (connect to user's BRAM port A)
@@ -73,6 +81,7 @@ architecture rtl of pal_bw_top is
 
   signal h_cnt : integer range 0 to H_TOTAL - 1;
   signal v_cnt : integer range 0 to V_TOTAL - 1;
+  signal ce_s  : std_logic;   -- 10 MHz pixel clock enable from pal_timing
 
   signal hsync_s  : std_logic;
   signal vsync_s  : std_logic;
@@ -91,10 +100,10 @@ begin
   assert V_SYNC_L + V_BACK_L + V_ACTIVE_L < V_TOTAL
     report "V active region exceeds V_TOTAL" severity failure;
 
-  -- H/V counter
+  -- H/V counter with clock-enable divider
   u_timing : entity work.pal_timing
-    generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL)
-    port map (clk => clk, rst => rst, h_cnt => h_cnt, v_cnt => v_cnt);
+    generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL, CLK_MHZ => CLK_MHZ)
+    port map (clk => clk, rst => rst, ce => ce_s, h_cnt => h_cnt, v_cnt => v_cnt);
 
   -- Region flag decode
   u_sync : entity work.pal_sync_gen
