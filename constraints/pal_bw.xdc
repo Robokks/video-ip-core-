@@ -1,6 +1,8 @@
 # PAL B&W Video IP Core -- Timing Constraints
-# Target: Xilinx 7-series / UltraScale (update PACKAGE_PIN for your board)
+# Target: NI cRIO-9056 -- Xilinx Artix-7 XC7A75T
 # Clock: 10 MHz pixel clock (100 ns period)
+# NOTE: When used as a LabVIEW CLIP, pin assignments are managed by
+#       LabVIEW FPGA / NI-RIO driver -- only timing constraints are needed here.
 
 # --- Primary clock ---
 # Replace [get_ports clk] with your actual clock net if it is an internal signal.
@@ -27,28 +29,19 @@ set_false_path -from [get_ports rst]
 # bram_clk is driven by the same clock source; no separate constraint needed.
 
 # -----------------------------------------------------------------------
-# Pin assignments -- EDIT FOR YOUR BOARD
-# The example below uses Arty A7-35T (xc7a35ticsg324-1L).
-# Uncomment and update pin numbers before running implementation.
+# cRIO-9056 + NI-9401 module connection
 # -----------------------------------------------------------------------
-
-## 10 MHz clock input (example: external oscillator on Pmod or dedicated clock pin)
-# set_property PACKAGE_PIN E3     [get_ports clk]
-# set_property IOSTANDARD LVCMOS33 [get_ports clk]
-
-## 4-bit DAC output (connect to Pmod or GPIO header)
-# set_property PACKAGE_PIN G13    [get_ports {dac_out[3]}]   ; # MSB (2^3 * V_ref/R)
-# set_property PACKAGE_PIN B11    [get_ports {dac_out[2]}]
-# set_property PACKAGE_PIN A11    [get_ports {dac_out[1]}]
-# set_property PACKAGE_PIN D12    [get_ports {dac_out[0]}]   ; # LSB
-# set_property IOSTANDARD LVCMOS33 [get_ports {dac_out[*]}]
-
-## Debug sync outputs
-# set_property PACKAGE_PIN D13    [get_ports hsync_o]
-# set_property PACKAGE_PIN B18    [get_ports vsync_o]
-# set_property PACKAGE_PIN A18    [get_ports active_o]
-# set_property IOSTANDARD LVCMOS33 [get_ports {hsync_o vsync_o active_o}]
-
-## Active-high reset (e.g. push button)
-# set_property PACKAGE_PIN C2     [get_ports rst]
-# set_property IOSTANDARD LVCMOS33 [get_ports rst]
+# Pin assignments are NOT set here for LabVIEW CLIP usage.
+# LabVIEW FPGA wires dac_out[3:0] to NI-9401 DIO0-DIO3 in the block diagram.
+#
+# NI-9401 DIO mapping (configure lower nibble as OUTPUT in LabVIEW):
+#   dac_out[3]  ->  NI-9401 DIO0   (MSB, weight 8)
+#   dac_out[2]  ->  NI-9401 DIO1   (weight 4)
+#   dac_out[1]  ->  NI-9401 DIO2   (weight 2)
+#   dac_out[0]  ->  NI-9401 DIO3   (LSB, weight 1)
+#
+# R-2R DAC circuit (5 V output from NI-9401):
+#   Use R = 270 ohm, 2R = 560 ohm (standard E24 values).
+#   Output into 75 ohm coax gives ~0-1 V composite video.
+#   See clip/pal_bw_clip.xml and README for full wiring diagram.
+# -----------------------------------------------------------------------

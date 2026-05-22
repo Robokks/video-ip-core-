@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LabVIEW FPGA Component-Level IP (CLIP) Descriptor
+  IP Core : PAL B/W Video (4-bit DAC output)
+  Target  : NI cRIO-9056 (Xilinx Artix-7 XC7A75T)
+  Clock   : 10 MHz base clock (available on cRIO-9056)
+  DAC out : 4-bit bus -> NI-9401 DIO0-DIO3 -> R-2R ladder -> composite video
+
+  How to use in LabVIEW FPGA:
+  1. Add this XML file to your LabVIEW FPGA project as a CLIP node.
+  2. Place the CLIP node inside a Single-Cycle Timed Loop (SCTL) clocked
+     at 10 MHz (select "10 MHz" base clock for the SCTL).
+  3. Wire the CLIP node signals as described in <SignalList> below.
+  4. Wire dac_out[3:0] to NI-9401 DIO0-DIO3 output channels.
+  5. Wire bram_addr and bram_en to your FPGA memory read logic;
+     feed the 1-bit read result back into bram_din on the next cycle.
+-->
+<Clip_Component_Level_IP
+    xmlns="http://www.ni.com/LVFPGAClip1.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.ni.com/LVFPGAClip1.0 CLIPSchema.xsd">
+
+  <!-- Identity -->
+  <Name>PAL_BW_Video_IP</Name>
+  <Version>1.0.0.0</Version>
+  <GUID>{A3F2C1D0-7B4E-4F91-83A2-1C9E5D6B2F08}</GUID>
+  <Description>
+    PAL black-and-white composite video generator.
+    Reads 1-bit pixel data from BRAM (1=white, 0=black) and outputs a
+    4-bit DAC value on dac_out[3:0] representing PAL sync, blanking,
+    and luminance levels. Connect dac_out to NI-9401 DIO0-DIO3.
+  </Description>
+
+  <!-- Target device -->
+  <TargetChip>xc7a75t</TargetChip>
+
+  <!-- VHDL source files (all must be present relative to this XML file) -->
+  <FileList>
+    <File>
+      <FileName>pal_timing.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+    <File>
+      <FileName>pal_sync_gen.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+    <File>
+      <FileName>pal_dac_mux.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+    <File>
+      <FileName>pal_bw_top.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+  </FileList>
+
+  <!-- Top-level VHDL entity -->
+  <TopLevelModule>
+    <ModuleName>pal_bw_top</ModuleName>
+  </TopLevelModule>
+
+  <!-- Clock: tie to cRIO-9056 10 MHz base clock -->
+  <ClockList>
+    <Clock>
+      <ClockName>clk</ClockName>
+      <ClockSignalName>clk</ClockSignalName>
+      <!-- LabVIEW will connect this to the 10 MHz SCTL clock -->
+      <ClockRate>10000000</ClockRate>
+    </Clock>
+  </ClockList>
+
+  <!--
+    Signal mapping between LabVIEW FPGA diagram and VHDL entity ports.
+    Direction is from LabVIEW's perspective:
+      FromLabVIEW = LabVIEW drives this input port of the VHDL entity
+      ToLabVIEW   = VHDL entity output read by LabVIEW
+  -->
+  <SignalList>
+
+    <!-- Clock driven by SCTL (10 MHz) -- connected automatically via ClockList -->
+    <!-- rst: wire to a LabVIEW Boolean control or FALSE for free-run -->
+    <Signal>
+      <SignalName>rst</SignalName>
+      <SignalDirection>FromLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>Synchronous reset, active-high. Wire to FALSE to free-run.</Description>
+    </Signal>
+
+    <!-- BRAM interface (LabVIEW reads pixel from its FPGA array at this address) -->
+    <Signal>
+      <SignalName>bram_en</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>Read enable. Only read memory when this is TRUE.</Description>
+    </Signal>
+    <Signal>
+      <SignalName>bram_addr</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>U32</SignalDataType>
+      <SignalWidth>19</SignalWidth>
+      <Description>
+        Row-major pixel address: line*520 + pixel_x. Range 0..299519.
+        Use this to index your LabVIEW FPGA array on each clock cycle.
+      </Description>
+    </Signal>
+    <Signal>
+      <SignalName>bram_din</SignalName>
+      <SignalDirection>FromLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>
+        1-bit pixel read from your FPGA array (1=white, 0=black).
+        Apply the array value at (bram_addr) with 1-cycle latency
+        (register the read result one SCTL cycle before wiring here).
+      </Description>
+    </Signal>
+
+    <!-- 4-bit DAC output -> wire to NI-9401 DIO0-DIO3 -->
+    <Signal>
+      <SignalName>dac_out</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>U8</SignalDataType>
+      <SignalWidth>4</SignalWidth>
+      <Description>
+        4-bit composite video DAC value.
+        Bit 3 (MSB) -> NI-9401 DIO0
+        Bit 2       -> NI-9401 DIO1
+        Bit 1       -> NI-9401 DIO2
+        Bit 0 (LSB) -> NI-9401 DIO3
+        Then wire DIO0-3 to R-2R ladder (R=270ohm, 2R=560ohm) -> 75ohm coax.
+      </Description>
+    </Signal>
+
+    <!-- Debug outputs (optional, useful during bring-up) -->
+    <Signal>
+      <SignalName>hsync_o</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>H-sync pulse indicator (high during sync pulse).</Description>
+    </Signal>
+    <Signal>
+      <SignalName>vsync_o</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>V-sync indicator (high during broad vsync lines 0-4).</Description>
+    </Signal>
+    <Signal>
+      <SignalName>active_o</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>Active pixel window (high during 520x576 pixel area).</Description>
+    </Signal>
+
+  </SignalList>
+
+</Clip_Component_Level_IP>
