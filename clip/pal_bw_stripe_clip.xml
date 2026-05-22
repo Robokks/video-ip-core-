@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LabVIEW FPGA Component-Level IP (CLIP) Descriptor
+  IP Core : PAL B/W Video -- Stripe Pattern Generator (NO BRAM)
+  Revision: 2
+  Target  : NI cRIO-9056 (Xilinx Artix-7 XC7A75T)
+
+  Use this CLIP for:
+    - Hardware bring-up checks before connecting real pixel data
+    - Verifying NI-9401 DIO0-3 wiring and R-2R DAC circuit
+    - Checking composite video sync on a scope or monitor
+
+  How to use in LabVIEW FPGA:
+    1. Right-click FPGA Target -> New -> Component-Level IP
+    2. Browse to this file: clip/pal_bw_stripe_clip.xml
+    3. Place the CLIP node inside a Single-Cycle Timed Loop (SCTL)
+       at 40 MHz (or match the CLK_MHZ generic below).
+    4. Wire rst -> FALSE  (let it free-run)
+    5. Wire dac_out[3:0] -> NI-9401 DIO0, DIO1, DIO2, DIO3
+
+  NO memory, NO DMA, NO extra wiring needed.
+  The IP generates stripes internally.
+
+  To change stripe width or clock: edit the generic defaults in
+  rtl/pal_bw_stripe_top.vhd before compiling:
+    STRIPE_WIDTH : integer := 40    (pixels per stripe, default 40)
+    CLK_MHZ      : integer := 40    (input clock MHz: 10/20/30/40)
+-->
+<Clip_Component_Level_IP
+    xmlns="http://www.ni.com/LVFPGAClip1.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.ni.com/LVFPGAClip1.0 CLIPSchema.xsd">
+
+  <!-- Identity -->
+  <Name>PAL_BW_Stripe_Test</Name>
+  <Version>2.0.0.0</Version>
+  <GUID>{B7D3A2F1-4C8E-4A02-95B3-2D7F6E1C3A09}</GUID>
+  <Description>
+    PAL B/W stripe pattern generator -- no BRAM required.
+    Outputs alternating black/white vertical stripes (40 px wide by default)
+    with correct PAL sync and blanking. Use for hardware bring-up and
+    NI-9401 wiring checks before connecting real pixel data.
+  </Description>
+
+  <TargetChip>xc7a75t</TargetChip>
+
+  <!-- All 5 VHDL files (stripe top + 3 shared sub-modules) -->
+  <FileList>
+    <File>
+      <FileName>pal_timing.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+    <File>
+      <FileName>pal_sync_gen.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+    <File>
+      <FileName>pal_dac_mux.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+    <File>
+      <FileName>pal_bw_stripe_top.vhd</FileName>
+      <FileDirectory>../rtl</FileDirectory>
+      <FileType>VHDL</FileType>
+    </File>
+  </FileList>
+
+  <!-- Top-level entity: stripe generator (no BRAM port) -->
+  <TopLevelModule>
+    <ModuleName>pal_bw_stripe_top</ModuleName>
+  </TopLevelModule>
+
+  <!-- Clock: connect SCTL to 40 MHz primary clock on cRIO-9056 -->
+  <!-- If using a different base clock, change ClockRate to match CLK_MHZ*1000000 -->
+  <ClockList>
+    <Clock>
+      <ClockName>clk</ClockName>
+      <ClockSignalName>clk</ClockSignalName>
+      <ClockRate>40000000</ClockRate>
+    </Clock>
+  </ClockList>
+
+  <!--
+    Signal list -- much simpler than pal_bw_clip.xml: no BRAM signals.
+
+    FromLabVIEW = LabVIEW drives this input
+    ToLabVIEW   = LabVIEW reads this output
+  -->
+  <SignalList>
+
+    <!-- Reset: wire to FALSE to free-run, or a Boolean control to reset -->
+    <Signal>
+      <SignalName>rst</SignalName>
+      <SignalDirection>FromLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>Synchronous reset. Wire to FALSE for free-run.</Description>
+    </Signal>
+
+    <!-- 4-bit DAC output -> NI-9401 DIO0-DIO3 -> R-2R -> composite video -->
+    <Signal>
+      <SignalName>dac_out</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>U8</SignalDataType>
+      <SignalWidth>4</SignalWidth>
+      <Description>
+        4-bit composite video DAC value.
+        Bit 3 (MSB) -> NI-9401 DIO0
+        Bit 2       -> NI-9401 DIO1
+        Bit 1       -> NI-9401 DIO2
+        Bit 0 (LSB) -> NI-9401 DIO3
+      </Description>
+    </Signal>
+
+    <!-- Debug outputs (optional, wire to indicators for monitoring) -->
+    <Signal>
+      <SignalName>hsync_o</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>H-sync pulse indicator. Useful for scope trigger.</Description>
+    </Signal>
+    <Signal>
+      <SignalName>vsync_o</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>V-sync indicator (high during lines 0-4).</Description>
+    </Signal>
+    <Signal>
+      <SignalName>active_o</SignalName>
+      <SignalDirection>ToLabVIEW</SignalDirection>
+      <SignalDataType>Boolean</SignalDataType>
+      <SignalWidth>1</SignalWidth>
+      <Description>Active pixel window (high during 520x576 area).</Description>
+    </Signal>
+
+  </SignalList>
+
+</Clip_Component_Level_IP>
