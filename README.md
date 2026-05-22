@@ -1,6 +1,19 @@
 # PAL B&W Video IP Core (Xilinx Vivado)
 
-Generates a PAL composite black-and-white video signal from a 1-bit-per-pixel BRAM.
+A family of PAL composite black-and-white video cores targeting the
+**NI cRIO-9056** (Xilinx Artix-7) with a 4-bit DAC on an **NI-9401** DIO module.
+Three top-level variants are provided:
+
+| Variant | Top entity | BRAM? | Use case |
+|---|---|---|---|
+| BRAM pixel source | `pal_bw_top` | ✓ | Live image from LabVIEW FPGA memory |
+| Stripe pattern | `pal_bw_stripe_top` | ✗ | DAC wiring bring-up, runtime width/direction |
+| Multiburst pattern | `pal_bw_multiburst_top` | ✗ | DAC linearity / bandwidth test card |
+
+All three share the same three sub-modules (`pal_timing`, `pal_sync_gen`,
+`pal_dac_mux`) and accept a `CLK_MHZ` generic to select the input clock
+frequency (10 / 20 / 30 / 40 MHz); the internal clock-enable divider keeps
+the effective pixel rate at exactly **10 MHz** in all cases.
 
 ## Specifications
 
@@ -8,9 +21,10 @@ Generates a PAL composite black-and-white video signal from a 1-bit-per-pixel BR
 |---|---|
 | Standard | PAL (625 lines, 25 fps) |
 | Colour | Black & white only |
-| Clock | **10 MHz** (100 ns period) |
+| Input clock | **10 / 20 / 30 / 40 MHz** (set `CLK_MHZ` generic) |
+| Effective pixel rate | **10 MHz** (internal CE divider) |
 | DAC output | **4-bit** (16 levels, 0–15) |
-| Pixel input | 1-bit BRAM (Boolean: 1=white, 0=black) |
+| Pixel input (`pal_bw_top`) | 1-bit BRAM (Boolean: 1=white, 0=black) |
 | Active resolution | 520 × 576 pixels |
 | BRAM size needed | 520 × 576 = 299,520 bits ≈ 37 KB |
 
@@ -60,16 +74,24 @@ Connect dac_out to D7–D4, tie D3–D0 low. Add a unity-gain buffer op-amp.
 
 ```
 rtl/
-  pal_timing.vhd      H/V counters (640 × 625)
-  pal_sync_gen.vhd    Decode counters → hsync / vsync / active / blank
-  pal_dac_mux.vhd     Select 4-bit DAC level from region + pixel data
-  pal_bw_top.vhd      Top-level: BRAM interface + sub-module wiring
+  pal_timing.vhd             H/V counters (640 × 625) + CLK_MHZ CE divider
+  pal_sync_gen.vhd           Decode counters → hsync / vsync / active / blank
+  pal_dac_mux.vhd            Select 4-bit DAC level from region + pixel data
+  pal_bw_top.vhd             Top-level: BRAM interface + sub-module wiring
+  pal_bw_stripe_top.vhd      Stripe pattern generator (no BRAM, runtime width/dir)
+  pal_bw_multiburst_top.vhd  Multiburst test pattern (no BRAM, 8 zones, fixed)
 sim/
-  tb_pal_bw_top.vhd   Self-checking testbench (10 lines, all-white BRAM)
+  tb_pal_bw_top.vhd              Testbench: 10 lines, all-white BRAM, self-checking
+  tb_pal_bw_stripe_top.vhd       Testbench: vertical + horizontal stripe phases
+  tb_pal_bw_multiburst_top.vhd   Testbench: zones 0-2 pixel-exact verification
 constraints/
-  pal_bw.xdc          Timing constraints + commented pin assignments
+  pal_bw.xdc          Timing constraints (10 MHz clock, DAC output delays)
 tcl/
-  create_project.tcl  Vivado batch project creation
+  create_project.tcl  Vivado batch project creation (all sources included)
+clip/
+  pal_bw_clip.xml              LabVIEW FPGA CLIP: BRAM pixel source
+  pal_bw_stripe_clip.xml       LabVIEW FPGA CLIP: stripe pattern (runtime controls)
+  pal_bw_multiburst_clip.xml   LabVIEW FPGA CLIP: multiburst test pattern
 ```
 
 ## Quick Start
@@ -125,19 +147,80 @@ address = line_number * 520 + pixel_x
 
 ## Generics
 
-All timing and level values are exposed as generics on `pal_bw_top`:
+All timing and level values are exposed as generics on every top-level entity.
+`pal_bw_stripe_top` and `pal_bw_multiburst_top` share the same timing/level
+generics as `pal_bw_top` plus `CLK_MHZ`.
 
-| Generic | Default | Description |
+| Generic | Default | Applies to | Description |
+|---|---|---|---|
+| `H_FRONT` | 16 | all | Front porch clocks |
+| `H_SYNC_W` | 47 | all | H-sync pulse width clocks |
+| `H_BACK` | 57 | all | Back porch clocks |
+| `H_ACTIVE` | 520 | all | Active pixel clocks |
+| `H_TOTAL` | 640 | all | Total clocks per line |
+| `V_SYNC_L` | 5 | all | Vsync lines |
+| `V_BACK_L` | 20 | all | V back porch lines |
+| `V_ACTIVE_L` | 576 | all | Active picture lines |
+| `V_TOTAL` | 625 | all | Total lines per frame |
+| `LEVEL_SYNC` | `"0000"` | all | DAC value for sync tip |
+| `LEVEL_BLANK` | `"0100"` | all | DAC value for blanking/black |
+| `LEVEL_WHITE` | `"1111"` | all | DAC value for white pixel |
+| `CLK_MHZ` | 10 | all | Input clock MHz: 10 / 20 / 30 / 40 |
+| `NUM_ZONES` | 8 | multiburst | Number of frequency zones |
+| `ZONE_W` | 65 | multiburst | Pixels per zone (`H_ACTIVE / NUM_ZONES`) |
+
+## Clock Selection (CLK_MHZ Generic)
+
+The `CLK_MHZ` generic selects the input clock frequency. An internal
+clock-enable (`ce`) divides it back to a **10 MHz effective pixel rate**:
+
+| `CLK_MHZ` | Divider | Typical source (cRIO-9056) |
 |---|---|---|
-| `H_FRONT` | 16 | Front porch clocks |
-| `H_SYNC_W` | 47 | H-sync width clocks |
-| `H_BACK` | 57 | Back porch clocks |
-| `H_ACTIVE` | 520 | Active pixel clocks |
-| `H_TOTAL` | 640 | Total clocks per line |
-| `V_SYNC_L` | 5 | Vsync lines |
-| `V_BACK_L` | 20 | V back porch lines |
-| `V_ACTIVE_L` | 576 | Active picture lines |
-| `V_TOTAL` | 625 | Total lines per frame |
-| `LEVEL_SYNC` | `"0000"` | DAC value for sync tip |
-| `LEVEL_BLANK` | `"0100"` | DAC value for blanking/black |
-| `LEVEL_WHITE` | `"1111"` | DAC value for white pixel |
+| 10 | ÷1 | 10 MHz base clock |
+| 20 | ÷2 | 20 MHz base clock |
+| 30 | ÷3 | External / PLL |
+| 40 | ÷4 | **40 MHz primary clock (recommended)** |
+
+For LabVIEW FPGA / cRIO-9056 use `CLK_MHZ => 40` inside a **40 MHz
+Single-Cycle Timed Loop**. All three CLIP XML files are configured for
+40 MHz by default.
+
+## Stripe Pattern Generator (`pal_bw_stripe_top`)
+
+No BRAM required. Generates alternating black/white stripes whose width and
+orientation are controlled at runtime from LabVIEW:
+
+| Port | Type | Direction | Description |
+|---|---|---|---|
+| `stripe_width` | `std_logic_vector(15:0)` | in | Pixels per stripe (vertical) or lines per stripe (horizontal) |
+| `stripe_dir` | `std_logic` | in | `'0'` = vertical stripes, `'1'` = horizontal stripes |
+
+Both inputs are sampled every frame so LabVIEW can change them live.
+Changes take effect at the start of the next frame.
+
+**Example (40 MHz SCTL):**
+```
+stripe_width := 40;   -- 40-pixel vertical stripes
+stripe_dir   := FALSE;
+```
+
+## Multiburst Test Pattern Generator (`pal_bw_multiburst_top`)
+
+No BRAM, no runtime inputs. Generates a standard video resolution test card:
+520 active pixels split into **8 zones of 65 pixels**, stripe width doubling
+per zone:
+
+| Zone | Pixels | Stripe width | Frequency |
+|---|---|---|---|
+| 0 | 0–64 | 1 px | 5 MHz (finest) |
+| 1 | 65–129 | 2 px | 2.5 MHz |
+| 2 | 130–194 | 4 px | 1.25 MHz |
+| 3 | 195–259 | 8 px | 625 kHz |
+| 4 | 260–324 | 16 px | 312 kHz |
+| 5 | 325–389 | 32 px | 156 kHz |
+| 6 | 390–454 | 64 px | 78 kHz |
+| 7 | 455–519 | 128 px | solid black (zone narrower than stripe) |
+
+Each zone resets to black at its left boundary. Pattern is identical on
+every active line. Use to verify DAC linearity and measure the analogue
+bandwidth of the output path.

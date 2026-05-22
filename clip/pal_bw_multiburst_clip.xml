@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LabVIEW FPGA CLIP Descriptor -- PAL B/W Multiburst Test Pattern (NO BRAM)
+  Target  : NI cRIO-9056  (Artix-7 XC7A75T)
+  LabVIEW : 2019 SP1 or later with FPGA Module
+
+  Steps to load in LabVIEW FPGA:
+    1. Project Explorer -> FPGA Target
+       Right-click -> New -> Component-Level IP
+    2. Browse to this file
+    3. Place CLIP node inside Single-Cycle Timed Loop at 40 MHz
+    4. Wire rst -> FALSE  (or Boolean control for debug reset)
+    5. Wire dac_out[3:0] -> Mod1/DIO0, DIO1, DIO2, DIO3  (NI-9401)
+       Bit mapping: dac_out[3]->DIO0 (MSB), dac_out[0]->DIO3 (LSB)
+
+  No BRAM or DMA connection required -- pattern is fully self-contained.
+  The multiburst pattern divides the 520 active pixels into 8 zones of
+  65 pixels each.  Stripe width doubles in each zone (1,2,4,8,16,32,64,128 px).
+
+  Typical use: bring-up / DAC linearity check before connecting pixel data.
+-->
+<CLIPDeclaration>
+
+  <Name>PAL_BW_Multiburst</Name>
+  <GUID>{C4E1B3A0-8D5F-4C12-A6B4-3E8F7D2A1C05}</GUID>
+  <Version>1.0</Version>
+  <Description>PAL B/W multiburst test pattern generator. No BRAM. Generates 8-zone vertical stripe pattern with doubling stripe widths (1,2,4,8,16,32,64,128 px). Outputs 4-bit DAC value for NI-9401 DIO0-3 and R-2R ladder. Use for DAC linearity and bandwidth testing.</Description>
+
+  <!-- HDL source files: dependencies first, top-level last -->
+  <HDLFileList>
+    <HDLFile isTopLevelFile="false">
+      <FileName>pal_timing.vhd</FileName>
+      <FileDirectory>..\rtl</FileDirectory>
+    </HDLFile>
+    <HDLFile isTopLevelFile="false">
+      <FileName>pal_sync_gen.vhd</FileName>
+      <FileDirectory>..\rtl</FileDirectory>
+    </HDLFile>
+    <HDLFile isTopLevelFile="false">
+      <FileName>pal_dac_mux.vhd</FileName>
+      <FileDirectory>..\rtl</FileDirectory>
+    </HDLFile>
+    <HDLFile isTopLevelFile="true">
+      <FileName>pal_bw_multiburst_top.vhd</FileName>
+      <FileDirectory>..\rtl</FileDirectory>
+    </HDLFile>
+  </HDLFileList>
+
+  <SignalList>
+
+    <!-- Clock: tied to SCTL clock automatically by LabVIEW -->
+    <CLIPSignal>
+      <Name>clk</Name>
+      <DataType>Clock</DataType>
+      <Direction>ToCLIP</Direction>
+      <ClockFrequencyInHz>40000000</ClockFrequencyInHz>
+    </CLIPSignal>
+
+    <!-- Reset: wire to FALSE for normal operation -->
+    <CLIPSignal>
+      <Name>rst</Name>
+      <DataType>Boolean</DataType>
+      <Direction>ToCLIP</Direction>
+    </CLIPSignal>
+
+    <!-- 4-bit DAC output: bit3->DIO0  bit2->DIO1  bit1->DIO2  bit0->DIO3 -->
+    <CLIPSignal>
+      <Name>dac_out</Name>
+      <DataType>U8</DataType>
+      <NumberOfBits>4</NumberOfBits>
+      <Direction>FromCLIP</Direction>
+    </CLIPSignal>
+
+    <!-- Debug outputs (optional -- useful on oscilloscope / logic analyser) -->
+    <CLIPSignal>
+      <Name>hsync_o</Name>
+      <DataType>Boolean</DataType>
+      <Direction>FromCLIP</Direction>
+    </CLIPSignal>
+
+    <CLIPSignal>
+      <Name>vsync_o</Name>
+      <DataType>Boolean</DataType>
+      <Direction>FromCLIP</Direction>
+    </CLIPSignal>
+
+    <CLIPSignal>
+      <Name>active_o</Name>
+      <DataType>Boolean</DataType>
+      <Direction>FromCLIP</Direction>
+    </CLIPSignal>
+
+  </SignalList>
+
+</CLIPDeclaration>
