@@ -1,0 +1,394 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- PAL B&W BRAM Video IP (interlaced PAL, 625 lines, 50 Hz field rate)
+--
+-- Extends pal_tv_interlaced_top with a fifth pattern source (sel = 4):
+-- pixels are read from an internal 1-bit BRAM written by the host.
+--
+-- sel 0  Vertical bars        (8 zones, STRIPE/WHITE/...)
+-- sel 1  Horizontal bars      (8 zones per field)
+-- sel 2  Horizontal gradient  (10 grey steps)
+-- sel 3  Vertical gradient    (10 grey steps)
+-- sel 4  BRAM pixel source    (Boolean: 0 = black_lvl, 1 = brightness)
+--
+-- BRAM write port (host side, independent of pixel clock):
+--   bram_wr_en   pulse '1' for one clock to write one pixel
+--   bram_wr_addr address (0 .. BRAM_DEPTH-1), 19-bit
+--   bram_wr_data 1-bit pixel value
+--
+-- bram_len (runtime input):
+--   Number of valid pixels stored.  The read address wraps at this boundary.
+--   bram_len = 520          one line, repeated on every active line
+--   bram_len = 149760       field-1 content (288 * 520), repeated on field 2
+--   bram_len = 299520       full unique frame (520 * 576)
+--
+-- BRAM address layout (sel = 4):
+--   addr 0 .. 519             line 0 of F1  (v = 24)
+--   addr 520 .. 1039          line 1 of F1  (v = 25)
+--   ...
+--   addr 149760 .. 149760+519 line 0 of F2  (v = 336, only if bram_len > 149760)
+--
+-- Address counter resets at the start of field-1 active region each frame.
+-- Field 2 continues from where field 1 left off (correct for full-frame BRAM).
+--
+-- Xilinx BRAM inference:
+--   The bram_mem signal carries a "ram_style = block" attribute so Vivado
+--   infers Block RAM.  BRAM_DEPTH = 299520 needs ~10 x BRAM36 on Artix-7.
+--   Set BRAM_DEPTH to a power-of-two for most efficient packing.
+entity pal_tv_bram_top is
+  generic (
+    H_FRONT    : integer := 16;
+    H_SYNC_W   : integer := 47;
+    H_BACK     : integer := 57;
+    H_ACTIVE   : integer := 520;
+    H_TOTAL    : integer := 640;
+    V_TOTAL    : integer := 625;
+    LEVEL_SYNC  : std_logic_vector(3 downto 0) := "0000";
+    LEVEL_BLANK : std_logic_vector(3 downto 0) := "0100";
+    LEVEL_WHITE : std_logic_vector(3 downto 0) := "1111";
+    CLK_MHZ     : integer := 40;
+    STRIPE_W    : integer := 4;
+    BRAM_DEPTH  : integer := 299520   -- 520 * 576; set to 524288 (2^19) for power-of-2
+  );
+  port (
+    clk          : in  std_logic;
+    rst          : in  std_logic;
+    sel          : in  std_logic_vector(7 downto 0);
+    brightness   : in  std_logic_vector(3 downto 0) := "1111";  -- white level
+    black_lvl    : in  std_logic_vector(3 downto 0) := "0100";  -- black/floor level
+    -- BRAM write port (synchronous; write at any time, gated only by bram_wr_en)
+    bram_wr_en   : in  std_logic                     := '0';
+    bram_wr_addr : in  std_logic_vector(18 downto 0) := (others => '0');
+    bram_wr_data : in  std_logic                     := '0';
+    -- Number of valid pixels in BRAM (address wraps here)
+    bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
+    -- Video outputs
+    dac_out      : out std_logic_vector(3 downto 0);
+    hsync_o      : out std_logic;   -- composite sync (1 = sync tip)
+    vsync_o      : out std_logic;   -- field indicator (0 = F1, 1 = F2)
+    active_o     : out std_logic;
+    blank_o      : out std_logic    -- HIGH during blanking pedestal
+  );
+end entity pal_tv_bram_top;
+
+architecture rtl of pal_tv_bram_top is
+
+  constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
+
+  constant V_ACT_S_F1 : integer := 24;
+  constant V_ACT_E_F1 : integer := 311;
+  constant V_ACT_S_F2 : integer := 336;
+  constant V_ACT_E_F2 : integer := 623;
+  constant V_ACTIVE_F : integer := 288;
+
+  constant NUM_ZONES  : integer := 8;
+  constant ZONE_W     : integer := H_ACTIVE  / NUM_ZONES;   -- 65
+  constant ZONE_H     : integer := V_ACTIVE_F / NUM_ZONES;  -- 36
+
+  type zone_kind    is (Z_BLACK, Z_WHITE, Z_STRIPE);
+  type zone_table_t is array (0 to NUM_ZONES - 1) of zone_kind;
+  constant ZONE_TABLE : zone_table_t := (
+    0 => Z_STRIPE, 1 => Z_WHITE,  2 => Z_STRIPE, 3 => Z_WHITE,
+    4 => Z_BLACK,  5 => Z_STRIPE, 6 => Z_WHITE,  7 => Z_STRIPE
+  );
+
+  constant GZONES  : integer := 10;
+  constant GZONE_W : integer := H_ACTIVE  / GZONES;   -- 52
+  constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28
+
+  -- -----------------------------------------------------------------------
+  -- 1-bit BRAM  (Vivado: infer Block RAM via ram_style attribute)
+  -- -----------------------------------------------------------------------
+  type bram_t is array (0 to BRAM_DEPTH - 1) of std_logic;
+  signal bram_mem     : bram_t := (others => '0');
+  attribute ram_style          : string;
+  attribute ram_style of bram_mem : signal is "block";
+
+  signal bram_rd_addr  : integer range 0 to BRAM_DEPTH - 1 := 0;
+  signal bram_pixel    : std_logic;
+  signal bram_len_i    : integer range 1 to BRAM_DEPTH;
+  signal bram_level    : std_logic_vector(3 downto 0);
+
+  -- H/V counters
+  signal h_cnt : integer range 0 to 639;
+  signal v_cnt : integer range 0 to 624;
+  signal ce_s  : std_logic;
+
+  -- Interlaced composite sync
+  signal csync_s  : std_logic;
+  signal field_s  : std_logic;
+  signal active_s : std_logic;
+
+  signal in_f1_active  : boolean;
+  signal in_f2_active  : boolean;
+  signal in_any_active : boolean;
+
+  -- Pattern generator state
+  signal zone_idx_v   : integer range 0 to NUM_ZONES - 1 := 0;
+  signal px_in_zone   : integer range 0 to ZONE_W - 1     := 0;
+  signal stripe_cnt_v : integer range 0 to STRIPE_W - 1   := 0;
+  signal stripe_ph_v  : std_logic                         := '0';
+
+  signal zone_idx_h   : integer range 0 to NUM_ZONES - 1 := 0;
+  signal line_in_zone : integer range 0 to ZONE_H - 1     := 0;
+  signal stripe_cnt_h : integer range 0 to STRIPE_W - 1   := 0;
+  signal stripe_ph_h  : std_logic                         := '0';
+
+  signal gzx_idx : integer range 0 to GZONES - 1  := 0;
+  signal gpx_in  : integer range 0 to GZONE_W - 1 := 0;
+  signal gzy_idx : integer range 0 to GZONES - 1  := 0;
+  signal gln_in  : integer range 0 to GZONE_H - 1 := 0;
+
+  signal color_v      : std_logic;
+  signal color_h      : std_logic;
+  signal sel_i        : integer range 0 to 255;
+  signal active_level : std_logic_vector(3 downto 0);
+
+  -- Brightness / black level
+  signal white_level_i : integer range 4 to 15;
+  signal white_s       : std_logic_vector(3 downto 0);
+  signal black_level_i : integer range 4 to 15;
+  signal black_s       : std_logic_vector(3 downto 0);
+  signal grad_x_s      : std_logic_vector(3 downto 0);
+  signal grad_y_s      : std_logic_vector(3 downto 0);
+
+begin
+
+  assert NUM_ZONES * ZONE_W = H_ACTIVE
+    report "NUM_ZONES * ZONE_W /= H_ACTIVE" severity failure;
+  assert NUM_ZONES * ZONE_H = V_ACTIVE_F
+    report "NUM_ZONES * ZONE_H /= V_ACTIVE_F" severity failure;
+  assert GZONES * GZONE_W = H_ACTIVE
+    report "GZONES * GZONE_W /= H_ACTIVE" severity failure;
+
+  sel_i <= to_integer(unsigned(sel));
+
+  u_timing : entity work.pal_timing
+    generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL, CLK_MHZ => CLK_MHZ)
+    port map (clk => clk, rst => rst, ce => ce_s,
+              h_cnt => h_cnt, v_cnt => v_cnt);
+
+  u_csync : entity work.pal_csync_il
+    generic map (
+      H_FRONT => H_FRONT, H_SYNC_W => H_SYNC_W,
+      H_BACK  => H_BACK,  H_ACTIVE => H_ACTIVE, H_TOTAL => H_TOTAL,
+      V_ACT_S_F1 => V_ACT_S_F1, V_ACT_E_F1 => V_ACT_E_F1,
+      V_ACT_S_F2 => V_ACT_S_F2, V_ACT_E_F2 => V_ACT_E_F2)
+    port map (h_cnt => h_cnt, v_cnt => v_cnt,
+              csync => csync_s, field => field_s, active => active_s);
+
+  in_f1_active  <= (v_cnt >= V_ACT_S_F1 and v_cnt <= V_ACT_E_F1);
+  in_f2_active  <= (v_cnt >= V_ACT_S_F2 and v_cnt <= V_ACT_E_F2);
+  in_any_active <= in_f1_active or in_f2_active;
+
+  -- -----------------------------------------------------------------------
+  -- Vertical bar generator
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        zone_idx_v <= 0; px_in_zone <= 0; stripe_cnt_v <= 0; stripe_ph_v <= '0';
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and in_any_active then
+          zone_idx_v <= 0; px_in_zone <= 0; stripe_cnt_v <= 0; stripe_ph_v <= '0';
+        elsif active_s = '1' then
+          if px_in_zone = ZONE_W - 1 then
+            if zone_idx_v < NUM_ZONES - 1 then zone_idx_v <= zone_idx_v + 1; end if;
+            px_in_zone <= 0; stripe_cnt_v <= 0; stripe_ph_v <= '0';
+          else
+            px_in_zone <= px_in_zone + 1;
+            if stripe_cnt_v = STRIPE_W - 1 then
+              stripe_cnt_v <= 0; stripe_ph_v <= not stripe_ph_v;
+            else
+              stripe_cnt_v <= stripe_cnt_v + 1;
+            end if;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Horizontal bar generator
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
+      elsif ce_s = '1' then
+        if (v_cnt = V_ACT_S_F1 - 1 or v_cnt = V_ACT_S_F2 - 1) and
+           h_cnt = H_TOTAL - 1 then
+          zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          if line_in_zone = ZONE_H - 1 then
+            if zone_idx_h < NUM_ZONES - 1 then zone_idx_h <= zone_idx_h + 1; end if;
+            line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
+          else
+            line_in_zone <= line_in_zone + 1;
+            if stripe_cnt_h = STRIPE_W - 1 then
+              stripe_cnt_h <= 0; stripe_ph_h <= not stripe_ph_h;
+            else
+              stripe_cnt_h <= stripe_cnt_h + 1;
+            end if;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Horizontal gradient generator
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        gzx_idx <= 0; gpx_in <= 0;
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and in_any_active then
+          gzx_idx <= 0; gpx_in <= 0;
+        elsif active_s = '1' then
+          if gpx_in = GZONE_W - 1 then
+            if gzx_idx < GZONES - 1 then gzx_idx <= gzx_idx + 1; end if;
+            gpx_in <= 0;
+          else
+            gpx_in <= gpx_in + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Vertical gradient generator
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        gzy_idx <= 0; gln_in <= 0;
+      elsif ce_s = '1' then
+        if (v_cnt = V_ACT_S_F1 - 1 or v_cnt = V_ACT_S_F2 - 1) and
+           h_cnt = H_TOTAL - 1 then
+          gzy_idx <= 0; gln_in <= 0;
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          if gln_in = GZONE_H - 1 then
+            if gzy_idx < GZONES - 1 then gzy_idx <= gzy_idx + 1; end if;
+            gln_in <= 0;
+          else
+            gln_in <= gln_in + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- BRAM: synchronous write, asynchronous read
+  -- -----------------------------------------------------------------------
+  -- Clamp bram_len to [1 .. BRAM_DEPTH]; 0 or overflow → use full depth
+  bram_len_i <= BRAM_DEPTH
+                  when to_integer(unsigned(bram_len)) = 0 or
+                       to_integer(unsigned(bram_len)) > BRAM_DEPTH
+                  else to_integer(unsigned(bram_len));
+
+  -- Write port (host writes pixel data; bounds-checked)
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if bram_wr_en = '1' and
+         to_integer(unsigned(bram_wr_addr)) < BRAM_DEPTH then
+        bram_mem(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+      end if;
+    end if;
+  end process;
+
+  -- Read address counter: resets at frame start (F1 line 23 end),
+  -- increments each active pixel, wraps at bram_len_i
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        bram_rd_addr <= 0;
+      elsif ce_s = '1' then
+        if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
+          bram_rd_addr <= 0;                          -- reset at frame boundary
+        elsif active_s = '1' then
+          if bram_rd_addr >= bram_len_i - 1 then
+            bram_rd_addr <= 0;                        -- wrap at bram_len_i
+          else
+            bram_rd_addr <= bram_rd_addr + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- Asynchronous read (1-bit pixel)
+  bram_pixel <= bram_mem(bram_rd_addr);
+  bram_level <= white_s when bram_pixel = '1' else black_s;
+
+  -- -----------------------------------------------------------------------
+  -- Brightness / black-level control (same as interlaced_top)
+  -- -----------------------------------------------------------------------
+  white_level_i <= 4 when unsigned(brightness) < 4
+                     else to_integer(unsigned(brightness));
+  white_s <= std_logic_vector(to_unsigned(white_level_i, 4));
+
+  process(black_lvl, white_level_i)
+    variable b : integer range 0 to 15;
+  begin
+    b := to_integer(unsigned(black_lvl));
+    if b < 4             then b := 4;             end if;
+    if b > white_level_i then b := white_level_i; end if;
+    black_level_i <= b;
+  end process;
+  black_s <= std_logic_vector(to_unsigned(black_level_i, 4));
+
+  process(white_level_i, black_level_i, gzx_idx, gzy_idx)
+    variable rng    : integer range 0 to 11;
+    variable lx, ly : integer range 0 to 15;
+  begin
+    rng := white_level_i - black_level_i;
+    if rng = 0 then
+      lx := black_level_i; ly := black_level_i;
+    else
+      lx := black_level_i + (gzx_idx * rng + 4) / 9;
+      ly := black_level_i + (gzy_idx * rng + 4) / 9;
+      if lx > 15 then lx := 15; end if;
+      if ly > 15 then ly := 15; end if;
+    end if;
+    grad_x_s <= std_logic_vector(to_unsigned(lx, 4));
+    grad_y_s <= std_logic_vector(to_unsigned(ly, 4));
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Active-level mux and DAC output
+  -- -----------------------------------------------------------------------
+  with ZONE_TABLE(zone_idx_v) select
+    color_v <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_v when Z_STRIPE;
+  with ZONE_TABLE(zone_idx_h) select
+    color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
+
+  active_level <= bram_level when sel_i = 4 else
+                  grad_x_s   when sel_i = 2 else
+                  grad_y_s   when sel_i = 3 else
+                  white_s    when (sel_i = 0 and color_v = '1') or
+                                  (sel_i = 1 and color_h = '1') else
+                  black_s;
+
+  -- Blanking pedestal is always LEVEL_BLANK (TV standard; unaffected by black_lvl)
+  dac_out  <= LEVEL_SYNC   when csync_s = '1' else
+              active_level when active_s = '1' else
+              LEVEL_BLANK;
+
+  hsync_o  <= csync_s;
+  vsync_o  <= field_s;
+  active_o <= active_s;
+  blank_o  <= not csync_s and not active_s;
+
+end architecture rtl;
