@@ -2,13 +2,23 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
--- Testbench for pal_tv_bram_top
+-- Testbench for pal_tv_bram_top -- 520 x 576 unique-pixel interlaced test
+--
+-- BRAM address layout (sel = 4, bram_len = 299520):
+--   addr 0         : F1 line 0 first pixel
+--   addr 519       : F1 line 0 last pixel
+--   addr 149759    : F1 line 287 last pixel  (288 * 520 - 1)
+--   addr 149760    : F2 line 0 first pixel   (288 * 520)
+--   addr 299519    : F2 line 287 last pixel  (576 * 520 - 1)
 --
 -- Checks:
---   1. sel=0  vertical bars (baseline, same as interlaced_top)
---   2. sel=4  BRAM pixel readout
---              pattern: pixel i = (i mod 2)  → alternating black/white
---              bram_len = 520  → wraps each line; second line identical to first
+--   1. sel=0 vertical bars (baseline)
+--   2. sel=4 F1 line 0:  px 0 = WHITE, px 1..518 = BLANK, px 519 = WHITE
+--   3. sel=4 F2 line 0:  px 0 = WHITE, px 1..519 = BLANK
+--        Checker 3 PROVES field 2 reads from addr 149760 (not 0):
+--        if the counter incorrectly reset, px 0 would be WHITE from addr 0 too,
+--        but px 1 would be BLANK -- same as checker 2 and undetectable.
+--        Therefore we also verify that addr 519 was NOT re-read (WHITE) at F2 px 519.
 entity tb_pal_tv_bram_top is
 end entity tb_pal_tv_bram_top;
 
@@ -17,15 +27,15 @@ architecture sim of tb_pal_tv_bram_top is
   signal clk : std_logic := '0';
   signal rst : std_logic := '1';
 
-  -- UUT0: sel=0 vertical bars
+  -- UUT0: sel=0 vertical bars (small BRAM for speed)
   signal dac0 : std_logic_vector(3 downto 0);
   signal cs0, fld0, ac0 : std_logic;
 
-  -- UUT1: sel=4 BRAM
+  -- UUT1: sel=4 full 520x576 unique frame (BRAM_DEPTH = 299520)
   signal dac1 : std_logic_vector(3 downto 0);
   signal cs1, fld1, ac1 : std_logic;
 
-  -- Shared BRAM write bus (drives uut1 only)
+  -- BRAM write bus (drives uut1)
   signal bram_wr_en   : std_logic                     := '0';
   signal bram_wr_addr : std_logic_vector(18 downto 0) := (others => '0');
   signal bram_wr_data : std_logic                     := '0';
@@ -38,8 +48,11 @@ architecture sim of tb_pal_tv_bram_top is
   constant ZONE_W     : integer := 65;
   constant NUM_ZONES  : integer := 8;
 
-  -- Use a small BRAM_DEPTH in simulation to keep elaboration fast
-  constant SIM_DEPTH  : integer := 1040;   -- two lines (2 * 520)
+  -- Full interlaced frame: 520 active pixels * 576 active lines
+  constant H_ACTIVE   : integer := 520;
+  constant F1_LINES   : integer := 288;   -- lines per field
+  constant FRAME_PX   : integer := H_ACTIVE * F1_LINES * 2;   -- 299 520
+  constant F2_START   : integer := H_ACTIVE * F1_LINES;        -- 149 760
 
   constant BLANK : std_logic_vector(3 downto 0) := "0100";
   constant WHITE : std_logic_vector(3 downto 0) := "1111";
@@ -66,16 +79,16 @@ begin
 
   clk <= not clk after CLK_PERIOD / 2;
 
-  -- sel=0: vertical bars, default brightness/black_lvl
+  -- sel=0 vertical bars; small BRAM to keep elaboration fast
   uut0 : entity work.pal_tv_bram_top
-    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W, BRAM_DEPTH => SIM_DEPTH)
+    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W, BRAM_DEPTH => 1040)
     port map (clk => clk, rst => rst, sel => x"00",
               dac_out => dac0, hsync_o => cs0, vsync_o => fld0,
               active_o => ac0, blank_o => open);
 
-  -- sel=4: BRAM source
+  -- sel=4 full 520x576 unique-pixel BRAM
   uut1 : entity work.pal_tv_bram_top
-    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W, BRAM_DEPTH => SIM_DEPTH)
+    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W, BRAM_DEPTH => FRAME_PX)
     port map (clk => clk, rst => rst, sel => x"04",
               bram_wr_en   => bram_wr_en,
               bram_wr_addr => bram_wr_addr,
@@ -85,37 +98,46 @@ begin
               active_o => ac1, blank_o => open);
 
   -- -----------------------------------------------------------------------
-  -- Clock / reset / BRAM initialisation / sim end
+  -- Clock / reset / BRAM write / simulation end
   --
-  -- BRAM is loaded during reset:
-  --   pixel i = (i mod 2)   →  even addresses = '0' (black), odd = '1' (white)
-  --   bram_len = 520  (one line; wraps every active line)
+  -- Marker pixels written to uut1 BRAM (rest stay '0' = black by default):
+  --   addr 0       = '1'  -> F1 line 0 first pixel  = WHITE
+  --   addr 519     = '1'  -> F1 line 0 last pixel   = WHITE
+  --   addr 149760  = '1'  -> F2 line 0 first pixel  = WHITE
+  --                          (if counter wrongly reset to 0, this would be wrong)
+  -- bram_len = 299520 (full frame, no premature wrap)
   -- -----------------------------------------------------------------------
   process
   begin
     rst <= '1';
-    -- Set length before (or during) reset so it is stable on release
-    bram_len <= std_logic_vector(to_unsigned(520, 19));
+    bram_len <= std_logic_vector(to_unsigned(FRAME_PX, 19));
 
-    -- Write 520-pixel alternating pattern while reset is held
-    bram_wr_en <= '1';
-    for i in 0 to 519 loop
-      bram_wr_addr <= std_logic_vector(to_unsigned(i, 19));
-      if i mod 2 = 0 then bram_wr_data <= '0'; else bram_wr_data <= '1'; end if;
-      wait until rising_edge(clk);
-    end loop;
-    bram_wr_en <= '0';
+    -- Write marker pixels while reset is held
+    wait until rising_edge(clk);
+
+    bram_wr_addr <= std_logic_vector(to_unsigned(0, 19));
+    bram_wr_data <= '1'; bram_wr_en <= '1';
+    wait until rising_edge(clk); bram_wr_en <= '0';
+
+    bram_wr_addr <= std_logic_vector(to_unsigned(519, 19));
+    bram_wr_data <= '1'; bram_wr_en <= '1';
+    wait until rising_edge(clk); bram_wr_en <= '0';
+
+    bram_wr_addr <= std_logic_vector(to_unsigned(F2_START, 19));  -- 149760
+    bram_wr_data <= '1'; bram_wr_en <= '1';
+    wait until rising_edge(clk); bram_wr_en <= '0';
 
     wait for 5 * CLK_PERIOD;
     rst <= '0';
 
+    -- Run long enough to see both fields (just over one full frame)
     wait for (V_TOTAL + 100) * H_TOTAL * CLK_PERIOD;
     report "=== Simulation complete ===" severity note;
     std.env.finish;
   end process;
 
   -- -----------------------------------------------------------------------
-  -- Checker 1: sel=0 vertical bars (Field-1, first active line)
+  -- Checker 1: sel=0 vertical bars (F1 first active line)
   -- -----------------------------------------------------------------------
   process
     variable px  : integer;
@@ -141,58 +163,67 @@ begin
   end process;
 
   -- -----------------------------------------------------------------------
-  -- Checker 2: sel=4 BRAM  -- Field-1 first active line
-  --   Expected: pixel 0 = BLANK, pixel 1 = WHITE, alternating, 520 pixels
+  -- Checker 2: sel=4 BRAM -- Field-1 line 0 (addr 0..519)
+  --   px 0   -> addr   0  = '1' -> WHITE
+  --   px 1..518 -> addr 1..518 = '0' -> BLANK
+  --   px 519  -> addr 519  = '1' -> WHITE
   -- -----------------------------------------------------------------------
   process
     variable px  : integer;
     variable exp : std_logic_vector(3 downto 0);
   begin
     wait until rst = '0';
-    wait until rising_edge(ac1);    -- first active line of field 1
+    wait until rising_edge(ac1);    -- F1 first active line
     px := 0;
     loop
       wait until falling_edge(clk);
       exit when ac1 = '0';
-      if px mod 2 = 0 then exp := BLANK; else exp := WHITE; end if;
+      if px = 0 or px = 519 then exp := WHITE; else exp := BLANK; end if;
       assert dac1 = exp
-        report "FAIL BRAM F1 px="&integer'image(px)&
+        report "FAIL BRAM F1-L0 px="&integer'image(px)&
                " exp="&integer'image(to_integer(unsigned(exp)))&
                " got="&integer'image(to_integer(unsigned(dac1))) severity error;
       px := px + 1;
     end loop;
     assert px = 520
-      report "FAIL BRAM F1 count="&integer'image(px)&" (want 520)" severity error;
-    report "=== sel=4 BRAM Field-1 line PASSED ("&integer'image(px)&" px) ===" severity note;
+      report "FAIL BRAM F1-L0 count="&integer'image(px)&" (want 520)" severity error;
+    report "=== BRAM F1 line 0 (addr 0..519) PASSED ===" severity note;
     wait;
   end process;
 
   -- -----------------------------------------------------------------------
-  -- Checker 3: sel=4 BRAM  -- Field-1 second active line (wrap verification)
-  --   bram_len=520 → address resets to 0; same pattern must repeat
+  -- Checker 3: sel=4 BRAM -- Field-2 line 0 (addr 149760..150279)
+  --
+  --   px 0   -> addr 149760 = '1' -> WHITE   (unique F2 marker)
+  --   px 1..519 -> addr 149761..150279 = '0' -> BLANK
+  --
+  --   If the counter incorrectly resets to 0 at the F1/F2 boundary:
+  --     px 0  would read addr 0 = '1' -> WHITE  (looks same -- see px 519 below)
+  --     px 519 would read addr 519 = '1' -> WHITE  <- WOULD FAIL as expected BLANK
+  --   So the px 519 = BLANK assertion is the definitive proof.
   -- -----------------------------------------------------------------------
   process
     variable px  : integer;
     variable exp : std_logic_vector(3 downto 0);
   begin
     wait until rst = '0';
-    wait until rising_edge(ac1);    -- first line (consume it)
-    wait until falling_edge(ac1);   -- end of first line
-    wait until rising_edge(ac1);    -- second active line
+    wait until rising_edge(fld1);   -- field indicator goes '1' = F2 starts
+    wait until rising_edge(ac1);    -- first active line of F2
     px := 0;
     loop
       wait until falling_edge(clk);
       exit when ac1 = '0';
-      if px mod 2 = 0 then exp := BLANK; else exp := WHITE; end if;
+      if px = 0 then exp := WHITE; else exp := BLANK; end if;
       assert dac1 = exp
-        report "FAIL BRAM wrap px="&integer'image(px)&
+        report "FAIL BRAM F2-L0 px="&integer'image(px)&
                " exp="&integer'image(to_integer(unsigned(exp)))&
                " got="&integer'image(to_integer(unsigned(dac1))) severity error;
       px := px + 1;
     end loop;
     assert px = 520
-      report "FAIL BRAM wrap count="&integer'image(px)&" (want 520)" severity error;
-    report "=== sel=4 BRAM wrap (line 2) PASSED ("&integer'image(px)&" px) ===" severity note;
+      report "FAIL BRAM F2-L0 count="&integer'image(px)&" (want 520)" severity error;
+    report "=== BRAM F2 line 0 (addr 149760..150279) PASSED ===" severity note;
+    report "    (px519=BLANK proves addr did NOT reset to 0 at field boundary)" severity note;
     wait;
   end process;
 
