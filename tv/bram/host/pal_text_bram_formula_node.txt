@@ -1,0 +1,128 @@
+LabVIEW Formula Node – PAL BRAM text renderer
+===============================================
+Generates a 520×576 pixel array (U8, 0=black / 1=white) from text
+strings, ready to write to pal_tv_bram_top's BRAM write port (sel = 4).
+
+─────────────────────────────────────────────
+STEP 1 – Font ROM constant (one-time setup)
+─────────────────────────────────────────────
+Create a LabVIEW constant: 1D array of I32, 760 elements.
+Right-click → New → Constant, choose "Array" type, set to I32.
+Paste the values from font_rom_760.csv (in this folder) into the array.
+
+  font_rom_760.csv layout: one value per line, decimal, 760 values total.
+  Corresponds to ASCII 32 (' ') through 126 ('~'), 8 bytes per character.
+  Index formula:  (ASCII_code - 32) * 8 + scan_line  →  8-pixel byte
+
+─────────────────────────────────────────────
+STEP 2 – Formula Node wiring
+─────────────────────────────────────────────
+Place a Formula Node on the block diagram.
+Add the following INPUTS on the left border:
+
+  font    [I32 array, 760 elements]   ← wire the constant from Step 1
+  ascii   [I32 array, n elements]     ← text as ASCII codes (see Step 3)
+  n       [I32]                       ← number of characters in ascii[]
+  x0      [I32]                       ← left edge of text, pixels (0..519)
+  y0      [I32]                       ← top  edge of text, screen rows (0..575)
+
+Add the following OUTPUT on the right border:
+
+  pixels  [I32 array, 299520 elements] ← pre-initialise with
+                                          "Initialize Array" (size 299520, val 0)
+                                          and wire as BOTH input AND output
+                                          (right-click border → "Change to Indicator"
+                                          or use tunnel in both directions)
+
+─────────────────────────────────────────────
+STEP 3 – Convert string to ascii[] array
+─────────────────────────────────────────────
+Before the Formula Node:
+  String constant / control → "String To Byte Array" → cast to I32 array
+  Wire to ascii[] input.
+  Wire "Array Size" of ascii[] to n.
+
+─────────────────────────────────────────────
+STEP 4 – Formula Node code  (paste inside the node)
+─────────────────────────────────────────────
+/*
+   Renders ASCII text into pixels[] at position (x0, y0).
+   Font is 8x8: each character = 8 bytes, bit7 = leftmost pixel.
+   pixels[] is 520*576 = 299520 elements, row-major (row 0 first).
+*/
+int32 ci, row, bit, asc, fb, px, py, addr;
+
+for (ci = 0; ci < n; ci = ci + 1) {
+    asc = ascii[ci] - 32;
+    if (asc < 0)  { asc = 0; }
+    if (asc > 94) { asc = 0; }
+
+    for (row = 0; row < 8; row = row + 1) {
+        fb = font[asc * 8 + row];
+
+        for (bit = 0; bit < 8; bit = bit + 1) {
+            /* extract bit (7-bit): bit=0→MSB, bit=7→LSB */
+            if ((fb >> (7 - bit)) & 1) {
+                px = x0 + ci * 8 + bit;
+                py = y0 + row;
+                if (px >= 0 && px < 520 && py >= 0 && py < 576) {
+                    addr = py * 520 + px;
+                    pixels[addr] = 1;
+                }
+            }
+        }
+    }
+}
+
+─────────────────────────────────────────────
+STEP 5 – Multiple lines helper (call node twice)
+─────────────────────────────────────────────
+To render multiple lines, call the Formula Node once per line.
+Chain pixels[] output → pixels[] input of the next call.
+Example for 3 centred lines:
+
+  Line 0:  x0 = (520 - len0*8)/2,  y0 = 272
+  Line 1:  x0 = (520 - len1*8)/2,  y0 = 284   (272 + 12)
+  Line 2:  x0 = (520 - len2*8)/2,  y0 = 296   (284 + 12)
+
+─────────────────────────────────────────────
+STEP 6 – Write pixels[] to BRAM
+─────────────────────────────────────────────
+After the Formula Node:
+
+  For Loop  i = 0..299519  (auto-indexed from pixels[] array)
+    │
+    ├─ bram_wr_addr ← i                     (U32 cast)
+    ├─ bram_wr_data ← (pixels[i] != 0)      (Boolean)
+    └─ bram_wr_en   ← TRUE  (hold for ≥ 1 FPGA clock via SCTL or RT loop)
+
+  After the loop:
+    sel ← 4  (BRAM pixel source)
+    rst ← FALSE
+    → PAL output shows rendered text
+
+─────────────────────────────────────────────
+STEP 7 – BRAM write speed note
+─────────────────────────────────────────────
+Writing 299 520 bytes from the LabVIEW RT host typically takes:
+  - RT host loop at 1 kHz  →  ~5 minutes  (too slow for live refresh)
+  - Use pal_bram_loader IP  →  ~30 ms at 10 MHz  (recommended)
+
+Recommended workflow:
+  1. Host renders text into pixels[] using this Formula Node
+  2. Host dumps pixels[] into a DMA FIFO (fast, ~ms)
+  3. pal_bram_loader reads FIFO, writes BRAM at 10 MHz
+  4. Set start = TRUE, wait for done = TRUE
+  5. Set sel = 4
+
+─────────────────────────────────────────────
+ADDRESS FORMULA (reference)
+─────────────────────────────────────────────
+BRAM address for screen pixel at column c, row r:
+    addr = r * 520 + c        (r = 0..575, c = 0..519)
+
+This matches the natural-sequential layout in pal_tv_bram_top:
+    addr 0..519     → image row 0  (F1 line 0)
+    addr 520..1039  → image row 1  (F2 line 0)
+    addr 1040..1559 → image row 2  (F1 line 1)
+    ...
