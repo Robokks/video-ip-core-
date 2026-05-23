@@ -1,0 +1,143 @@
+PAL Text → BRAM  —  LabVIEW Formula Node  (host side)
+========================================================
+
+OVERVIEW
+─────────────────────────────────────────────────────────
+Input  : text (as ASCII I32 array)  +  x0, y0  (pixel position)
+Output : 1D Boolean array [299520]  →  feed straight to your FIFO
+
+BRAM address = row * 520 + col   (natural sequential, sel = 4)
+
+
+════════════════════════════════════════════════════════
+ FORMULA NODE  (copy the code block below into the node)
+════════════════════════════════════════════════════════
+
+LEFT border  (inputs)          RIGHT border (outputs)
+─────────────────────          ──────────────────────
+ font      I32 array [760]
+ ascii_in  I32 array [n]
+ n         I32
+ x0        I32                  pixels   I32 array [299520]
+ y0        I32
+ pixels    I32 array [299520]  ← same name on both sides
+
+
+─── CODE (paste inside the Formula Node) ───────────────
+
+int32 ci, row, bit, asc, fb, px, py, addr;
+
+for (ci = 0; ci < n; ci = ci + 1) {
+    asc = ascii_in[ci] - 32;
+    if (asc < 0)  { asc = 0; }
+    if (asc > 94) { asc = 0; }
+
+    for (row = 0; row < 8; row = row + 1) {
+        fb = font[asc * 8 + row];
+
+        for (bit = 0; bit < 8; bit = bit + 1) {
+            if ((fb >> (7 - bit)) & 1) {
+                px = x0 + ci * 8 + bit;
+                py = y0 + row;
+                if (px >= 0 && px < 520 && py >= 0 && py < 576) {
+                    addr = py * 520 + px;
+                    pixels[addr] = 1;
+                }
+            }
+        }
+    }
+}
+
+─────────────────────────────────────────────────────────
+
+
+WIRING DIAGRAM (text art)
+═════════════════════════
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                     BLOCK DIAGRAM                           │
+  │                                                             │
+  │  [font constant]───────────────────────┐                   │
+  │  (I32 array, 760 values                │                   │
+  │   from font_rom_760.csv)               │                   │
+  │                                        │                   │
+  │  [String ctrl/const]                   │                   │
+  │       │                                │                   │
+  │  [String To Byte Array]                │                   │
+  │       │ U8[n]                          │                   │
+  │  [To Long Integer] ──── ascii_in ──────┤                   │
+  │                                        │                   │
+  │  [Array Size] ────────── n ────────────┤                   │
+  │                                        │                   │
+  │  [x0 constant] ─────────x0 ────────────┤  ┌─────────────┐ │
+  │  [y0 constant] ─────────y0 ────────────┼─►│ Formula     │ │
+  │                                        │  │ Node        ├─┼─► pixels [I32, 299520]
+  │  [Initialize Array]                    │  │             │ │        │
+  │   size = 299520  ───── pixels ─────────┘  └─────────────┘ │        │
+  │   fill = 0 (I32)                                           │   [Not Equal 0?]
+  │                                                            │        │
+  │                                                            │   Boolean[299520]
+  │                                                            │        │
+  │                                                            │   [Reshape Array]
+  │                                                            │   dims: [576, 520]
+  │                                                            │        │
+  │                                                            │   Boolean[576][520]
+  │                                                            │
+  └─────────────────────────────────────────────────────────────┘
+
+
+FOR MULTIPLE TEXT LINES — chain pixels[] through:
+═════════════════════════════════════════════════
+
+  [Init Array 299520 × 0]
+       │
+  ┌────┴─────────────────────────────────────────────┐
+  │ Formula Node 1  ("PAL 625/50", x0=96, y0=272)   │
+  └────┬─────────────────────────────────────────────┘
+       │ pixels[]
+  ┌────┴─────────────────────────────────────────────┐
+  │ Formula Node 2  ("FPGA VIDEO IP", x0=108, y0=284)│
+  └────┬─────────────────────────────────────────────┘
+       │ pixels[]
+  ┌────┴─────────────────────────────────────────────┐
+  │ Formula Node 3  ("BRAM TEXT", x0=152, y0=296)    │
+  └────┬─────────────────────────────────────────────┘
+       │ pixels[] I32[299520]
+  [Not Equal 0?]
+       │ Boolean[299520]      ← feed directly to your FIFO
+  [Reshape Array → 576×520]   ← optional, for 2D view
+
+
+CENTERING FORMULA
+═════════════════
+  x0 = (520 - len(text) * 8) / 2     integer divide
+  y0 = 288 - 4                        ≈ screen centre  (288 = 576/2)
+
+  For 3 lines spaced 12 px apart:
+    y0_line0 = 272   (288 - 16)
+    y0_line1 = 284   (288 -  4)
+    y0_line2 = 296   (288 +  8)
+
+
+FEED TO YOUR FIFO (existing pipeline)
+══════════════════════════════════════
+  Boolean[299520]
+       │
+  [For Loop, auto-index on array]
+       │  element (Boolean)
+  [Write to FIFO]  ← your existing FIFO
+       │
+  pal_bram_loader reads FIFO → writes BRAM at 10 MHz (~30 ms)
+       │
+  set sel = 4, rst = FALSE → PAL display shows text
+
+
+FONT INPUT — how to create the constant
+═════════════════════════════════════════
+  1. Right-click block diagram → New → Constant
+  2. Choose 1D Array of I32
+  3. Right-click the array constant → "Import from File..."
+     Select font_rom_760.csv  (760 decimal values, one per line)
+  OR
+  4. Paste the 760 values from font_rom_760.csv manually
+
