@@ -143,14 +143,66 @@ Outputs: DIO0 (LSB) … DIO3 (MSB).
 
 ## LabVIEW FPGA Integration
 
-Load files for the chosen variant in Vivado / LabVIEW FPGA in dependency order:
+### File Load Order
 
-**opt1_crt50:**  `pal_timing.vhd` → `pal_sync_gen.vhd` → `pal_tv_crt50_top.vhd`
+Add VHDL files to your LabVIEW FPGA / Vivado project **in the order shown**
+(each file depends on those above it).
 
-**opt2_interlaced:**  `pal_timing.vhd` → `pal_csync_il.vhd` → `pal_tv_interlaced_top.vhd`
+#### opt1_crt50
 
-**opt3_prog25:**  `pal_timing.vhd` → `pal_sync_gen.vhd` → `pal_tv_prog25_top.vhd`
+| Step | File | Role |
+|---|---|---|
+| 1 | `tv/pal_timing.vhd` | H/V counters, clock-enable divider |
+| 2 | `tv/pal_sync_gen.vhd` | Sync region decoder (hsync, vsync, active, blank) |
+| 3 | `tv/opt1_crt50/pal_tv_crt50_top.vhd` | **Top-level entity** |
 
-Set the top-level entity to the chosen `*_top` entity.
-Wire ports: `clk` → 40 MHz SCTL clock, `rst` → FALSE (or FPGA reset),
-`sel[7:0]` → U8 constant/control, `dac_out[3:0]` → DIO0–DIO3.
+#### opt2_interlaced
+
+| Step | File | Role |
+|---|---|---|
+| 1 | `tv/pal_timing.vhd` | H/V counters, clock-enable divider |
+| 2 | `tv/opt2_interlaced/pal_csync_il.vhd` | Interlaced composite sync (replaces pal_sync_gen) |
+| 3 | `tv/opt2_interlaced/pal_tv_interlaced_top.vhd` | **Top-level entity** |
+
+> **Note:** opt2 does **not** use `pal_sync_gen.vhd` — it has its own
+> interlaced composite sync generator (`pal_csync_il.vhd`).
+
+#### opt3_prog25
+
+| Step | File | Role |
+|---|---|---|
+| 1 | `tv/pal_timing.vhd` | H/V counters, clock-enable divider |
+| 2 | `tv/pal_sync_gen.vhd` | Sync region decoder (hsync, vsync, active, blank) |
+| 3 | `tv/opt3_prog25/pal_tv_prog25_top.vhd` | **Top-level entity** |
+
+---
+
+### Port Wiring (all variants)
+
+| Top-level port | LabVIEW FPGA / NI-9401 connection | Notes |
+|---|---|---|
+| `clk` | 40 MHz SCTL clock | Set generic `CLK_MHZ => 40` |
+| `rst` | `FALSE` constant | Assert `'1'` only for FPGA reset if needed |
+| `sel[7:0]` | U8 constant or front-panel control | `0x00`=Vbars, `0x01`=Hbars, `0x02`=Hgrad, `0x03`=Vgrad |
+| `dac_out[0]` | DIO0 (LSB) | R-2R bit 0 |
+| `dac_out[1]` | DIO1 | R-2R bit 1 |
+| `dac_out[2]` | DIO2 | R-2R bit 2 |
+| `dac_out[3]` | DIO3 (MSB) | R-2R bit 3 |
+| `hsync_o` | DIO or scope trigger (optional) | Composite sync (opt2) / H sync (opt1, opt3) |
+| `vsync_o` | DIO or scope trigger (optional) | Field indicator (opt2) / V sync (opt1, opt3) |
+| `active_o` | Scope trigger (optional) | High during active pixel window |
+
+---
+
+### Vivado / LabVIEW FPGA Project Steps
+
+1. Create a new LabVIEW FPGA project targeting the **NI cRIO-9056** (Artix-7 XC7A75T).
+2. Add a **CLIP (Component-Level IP)** or use **HDL Module** import.
+3. Add the VHDL files in the dependency order shown above.
+4. Set the **top-level entity** to:
+   - `pal_tv_crt50_top` for opt1
+   - `pal_tv_interlaced_top` for opt2
+   - `pal_tv_prog25_top` for opt3
+5. Set the `CLK_MHZ` generic to **40** (matches the 40 MHz SCTL clock).
+6. Wire `dac_out[3:0]` to four consecutive DIO lines on an **NI-9401** module.
+7. Connect DIO lines to the R-2R resistor ladder → 75 Ω composite video output.
