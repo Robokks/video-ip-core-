@@ -59,7 +59,8 @@ entity pal_tv_interlaced_top is
     dac_out  : out std_logic_vector(3 downto 0);
     hsync_o  : out std_logic;  -- composite sync (1=sync tip)
     vsync_o  : out std_logic;  -- field indicator (0=F1, 1=F2)
-    active_o : out std_logic
+    active_o : out std_logic;
+    blank_o  : out std_logic   -- HIGH during blanking pedestal (not csync, not active)
   );
 end entity pal_tv_interlaced_top;
 
@@ -308,5 +309,6 @@ begin
   hsync_o  <= csync_s;   -- composite sync out
   vsync_o  <= field_s;   -- field indicator (useful for scoping)
   active_o <= active_s;
+  blank_o  <= not csync_s and not active_s;
 
 end architecture rtl;

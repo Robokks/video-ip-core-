@@ -73,23 +73,23 @@ begin
   uut0 : entity work.pal_tv_prog25_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk=>clk, rst=>rst, sel=>x"00",
-              dac_out=>dac0, hsync_o=>hs0, vsync_o=>vs0, active_o=>ac0);
+              dac_out=>dac0, hsync_o=>hs0, vsync_o=>vs0, active_o=>ac0, blank_o=>open);
   uut1 : entity work.pal_tv_prog25_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk=>clk, rst=>rst, sel=>x"01",
-              dac_out=>dac1, hsync_o=>hs1, vsync_o=>vs1, active_o=>ac1);
+              dac_out=>dac1, hsync_o=>hs1, vsync_o=>vs1, active_o=>ac1, blank_o=>open);
   uut2 : entity work.pal_tv_prog25_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk=>clk, rst=>rst, sel=>x"02",
-              dac_out=>dac2, hsync_o=>hs2, vsync_o=>vs2, active_o=>ac2);
+              dac_out=>dac2, hsync_o=>hs2, vsync_o=>vs2, active_o=>ac2, blank_o=>open);
   uut3 : entity work.pal_tv_prog25_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk=>clk, rst=>rst, sel=>x"03",
-              dac_out=>dac3, hsync_o=>hs3, vsync_o=>vs3, active_o=>ac3);
+              dac_out=>dac3, hsync_o=>hs3, vsync_o=>vs3, active_o=>ac3, blank_o=>open);
   uut4 : entity work.pal_tv_prog25_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk=>clk, rst=>rst, sel=>x"00", contrast=>x"6",
-              dac_out=>dac4, hsync_o=>hs4, vsync_o=>vs4, active_o=>ac4);
+              dac_out=>dac4, hsync_o=>hs4, vsync_o=>vs4, active_o=>ac4, blank_o=>open);
 
   process
   begin

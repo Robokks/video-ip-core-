@@ -47,7 +47,8 @@ entity pal_tv_prog25_top is
     dac_out  : out std_logic_vector(3 downto 0);
     hsync_o  : out std_logic;
     vsync_o  : out std_logic;
-    active_o : out std_logic
+    active_o : out std_logic;
+    blank_o  : out std_logic   -- HIGH during blanking pedestal (not sync, not active)
   );
 end entity pal_tv_prog25_top;
 
@@ -264,5 +265,6 @@ begin
   hsync_o  <= hsync_s;
   vsync_o  <= vsync_s;
   active_o <= active_s;
+  blank_o  <= blank_s;
 
 end architecture rtl;
