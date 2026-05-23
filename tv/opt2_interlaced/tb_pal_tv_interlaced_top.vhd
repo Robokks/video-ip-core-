@@ -26,6 +26,10 @@ architecture sim of tb_pal_tv_interlaced_top is
   signal cs0  : std_logic;   -- composite sync (hsync_o)
   signal fld0 : std_logic;   -- field indicator (vsync_o)
   signal ac0  : std_logic;
+  signal dac1_lo : std_logic_vector(3 downto 0);
+  signal cs1_lo  : std_logic;
+  signal fld1_lo : std_logic;
+  signal ac1_lo  : std_logic;
 
   constant CLK_PERIOD : time := 100 ns;
 
@@ -64,6 +68,10 @@ begin
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk => clk, rst => rst, sel => x"00",
               dac_out => dac0, hsync_o => cs0, vsync_o => fld0, active_o => ac0);
+  uut1 : entity work.pal_tv_interlaced_top
+    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
+    port map (clk => clk, rst => rst, sel => x"00", contrast => x"6",
+              dac_out => dac1_lo, hsync_o => cs1_lo, vsync_o => fld1_lo, active_o => ac1_lo);
 
   process
   begin
@@ -182,6 +190,31 @@ begin
     assert px = 520
       report "FAIL F2 Vbar count="&integer'image(px)&" (want 520)" severity error;
     report "=== Field-2 vertical bars PASSED ("&integer'image(px)&" px) ===" severity note;
+    wait;
+  end process;
+
+  -- Checker 4: 20% contrast Field-1 vertical bars
+  process
+    variable px  : integer;
+    variable exp : std_logic_vector(3 downto 0);
+  begin
+    wait until rst = '0';
+    wait until rising_edge(ac1_lo);
+    px := 0;
+    loop
+      wait until falling_edge(clk);
+      exit when ac1_lo = '0';
+      exp := bar_color(px / ZONE_W, px mod ZONE_W);
+      if exp = WHITE then exp := x"6"; end if;
+      assert dac1_lo = exp
+        report "FAIL 20% F1 Vbar px="&integer'image(px)&
+               " exp="&integer'image(to_integer(unsigned(exp)))&
+               " got="&integer'image(to_integer(unsigned(dac1_lo))) severity error;
+      px := px + 1;
+    end loop;
+    assert px = 520
+      report "FAIL 20% F1 Vbar count="&integer'image(px)&" (want 520)" severity error;
+    report "=== 20% contrast Field-1 vertical bars PASSED ("&integer'image(px)&" px) ===" severity note;
     wait;
   end process;
 

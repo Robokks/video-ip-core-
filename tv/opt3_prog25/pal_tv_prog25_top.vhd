@@ -43,6 +43,7 @@ entity pal_tv_prog25_top is
     clk      : in  std_logic;
     rst      : in  std_logic;
     sel      : in  std_logic_vector(7 downto 0);
+    contrast : in  std_logic_vector(3 downto 0) := "1111";  -- white output level: x"6"=20%, x"F"=100%
     dac_out  : out std_logic_vector(3 downto 0);
     hsync_o  : out std_logic;
     vsync_o  : out std_logic;
@@ -69,12 +70,6 @@ architecture rtl of pal_tv_prog25_top is
   constant GZONES   : integer := 10;
   constant GZONE_W  : integer := H_ACTIVE   / GZONES;  -- 52
   constant GZONE_H  : integer := V_ACTIVE_L / GZONES;  -- 57
-
-  type grad_table_t is array (0 to GZONES - 1) of std_logic_vector(3 downto 0);
-  constant GRAD_TABLE : grad_table_t := (
-    0 => "0100", 1 => "0101", 2 => "0110", 3 => "1000", 4 => "1001",
-    5 => "1010", 6 => "1011", 7 => "1101", 8 => "1110", 9 => "1111"
-  );
 
   signal h_cnt : integer range 0 to 639;
   signal v_cnt : integer range 0 to 624;
@@ -106,6 +101,11 @@ architecture rtl of pal_tv_prog25_top is
   signal sel_i        : integer range 0 to 255;
   signal active_level : std_logic_vector(3 downto 0);
 
+  signal white_level_i : integer range 4 to 15;
+  signal white_s       : std_logic_vector(3 downto 0);
+  signal grad_x_s      : std_logic_vector(3 downto 0);
+  signal grad_y_s      : std_logic_vector(3 downto 0);
+
 begin
 
   assert NUM_ZONES * ZONE_W = H_ACTIVE   report "Zone W mismatch" severity failure;
@@ -113,6 +113,28 @@ begin
   assert GZONES * GZONE_W   = H_ACTIVE   report "GZone W mismatch" severity failure;
 
   sel_i <= to_integer(unsigned(sel));
+
+  -- Clamp contrast to [BLANK=4 .. 15]; values below 4 give no picture, default to black
+  white_level_i <= 4 when unsigned(contrast) < 4 else to_integer(unsigned(contrast));
+  white_s        <= std_logic_vector(to_unsigned(white_level_i, 4));
+
+  -- Contrast-scaled gradient: divides by constant 9, Vivado synthesises as reciprocal multiply
+  process(white_level_i, gzx_idx, gzy_idx)
+    variable rng    : integer range 0 to 11;
+    variable lx, ly : integer range 0 to 15;
+  begin
+    rng := white_level_i - 4;          -- 0 (20% floor) .. 11 (100%)
+    if rng = 0 then
+      lx := 4; ly := 4;                -- flat black at minimum contrast
+    else
+      lx := 4 + (gzx_idx * rng + 4) / 9;
+      ly := 4 + (gzy_idx * rng + 4) / 9;
+      if lx > 15 then lx := 15; end if;
+      if ly > 15 then ly := 15; end if;
+    end if;
+    grad_x_s <= std_logic_vector(to_unsigned(lx, 4));
+    grad_y_s <= std_logic_vector(to_unsigned(ly, 4));
+  end process;
 
   u_timing : entity work.pal_timing
     generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL, CLK_MHZ => CLK_MHZ)
@@ -228,10 +250,10 @@ begin
   with ZONE_TABLE(zone_idx_h) select
     color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
 
-  active_level <= GRAD_TABLE(gzx_idx) when sel_i = 2 else
-                  GRAD_TABLE(gzy_idx) when sel_i = 3 else
-                  LEVEL_WHITE when (sel_i = 0 and color_v = '1') or
-                                   (sel_i = 1 and color_h = '1') else
+  active_level <= grad_x_s when sel_i = 2 else
+                  grad_y_s when sel_i = 3 else
+                  white_s  when (sel_i = 0 and color_v = '1') or
+                                (sel_i = 1 and color_h = '1') else
                   LEVEL_BLANK;
 
   dac_out <= LEVEL_SYNC   when vsync_s = '1' else

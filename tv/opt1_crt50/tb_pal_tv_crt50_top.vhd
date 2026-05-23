@@ -20,6 +20,8 @@ architecture sim of tb_pal_tv_crt50_top is
   signal hs1, vs1, ac1           : std_logic;
   signal hs2, vs2, ac2           : std_logic;
   signal hs3, vs3, ac3           : std_logic;
+  signal dac4 : std_logic_vector(3 downto 0);
+  signal hs4, vs4, ac4 : std_logic;
 
   constant CLK_PERIOD : time := 100 ns;  -- 10 MHz
 
@@ -87,6 +89,10 @@ begin
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
     port map (clk=>clk, rst=>rst, sel=>x"03",
               dac_out=>dac3, hsync_o=>hs3, vsync_o=>vs3, active_o=>ac3);
+  uut4 : entity work.pal_tv_crt50_top
+    generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
+    port map (clk=>clk, rst=>rst, sel=>x"00", contrast=>x"6",
+              dac_out=>dac4, hsync_o=>hs4, vsync_o=>vs4, active_o=>ac4);
 
   process
   begin
@@ -194,6 +200,32 @@ begin
         " got="&integer'image(to_integer(unsigned(dac3))) severity error;
     end loop;
     report "=== VERTICAL gradient PASSED ("&integer'image(NLINES)&" lines) ===" severity note;
+    wait;
+  end process;
+
+  -- Checker: 20% contrast vertical bars (white pixels must output x"6")
+  process
+    variable px  : integer;
+    variable exp : std_logic_vector(3 downto 0);
+  begin
+    wait until rst = '0';
+    wait until rising_edge(ac4);
+    px := 0;
+    loop
+      wait until falling_edge(clk);
+      exit when ac4 = '0';
+      exp := bar_color(px / ZONE_W, px mod ZONE_W);
+      -- remap: WHITE->x"6", BLACK stays x"4"
+      if exp = WHITE then exp := x"6"; end if;
+      assert dac4 = exp
+        report "FAIL 20% Vbar px="&integer'image(px)&
+               " exp="&integer'image(to_integer(unsigned(exp)))&
+               " got="&integer'image(to_integer(unsigned(dac4))) severity error;
+      px := px + 1;
+    end loop;
+    assert px = 520
+      report "FAIL 20% Vbar count="&integer'image(px)&" (want 520)" severity error;
+    report "=== 20% contrast vertical bars PASSED ("&integer'image(px)&" px) ===" severity note;
     wait;
   end process;
 
