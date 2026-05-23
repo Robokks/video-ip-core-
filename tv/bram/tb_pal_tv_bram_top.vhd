@@ -87,7 +87,8 @@ begin
   uut0 : entity work.pal_tv_bram_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W, BRAM_DEPTH => 1040)
     port map (clk => clk, rst => rst, sel => x"00",
-              dac_out => dac0, hsync_o => cs0, vsync_o => fld0,
+              dac_out => dac0, csync_o => cs0, line_sync_o => open,
+              frame_sync_o => open, field_o => fld0,
               active_o => ac0, blank_o => open);
 
   -- sel=4 full 520x576 unique-pixel BRAM
@@ -98,7 +99,8 @@ begin
               bram_wr_addr => bram_wr_addr,
               bram_wr_data => bram_wr_data,
               bram_len     => bram_len,
-              dac_out => dac1, hsync_o => cs1, vsync_o => fld1,
+              dac_out => dac1, csync_o => cs1, line_sync_o => open,
+              frame_sync_o => open, field_o => fld1,
               active_o => ac1, blank_o => open);
 
   -- -----------------------------------------------------------------------

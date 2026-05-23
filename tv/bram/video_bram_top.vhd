@@ -63,11 +63,13 @@ entity video_bram_top is
     -- Number of valid BRAM pixels (wraps address at this boundary)
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
     -- Video outputs
-    dac_out  : out std_logic_vector(3 downto 0);
-    hsync_o  : out std_logic;   -- composite sync (1 = sync tip)
-    vsync_o  : out std_logic;   -- field indicator (0 = F1, 1 = F2)
-    active_o : out std_logic;
-    blank_o  : out std_logic
+    dac_out       : out std_logic_vector(3 downto 0);
+    csync_o       : out std_logic;   -- composite sync (H+V merged; 1 = sync tip)
+    line_sync_o   : out std_logic;   -- H sync only  (1 during hsync, never during vsync)
+    frame_sync_o  : out std_logic;   -- V sync pulse (1 during vsync broad-sync region)
+    field_o       : out std_logic;   -- field indicator (0 = F1, 1 = F2)
+    active_o      : out std_logic;   -- 1 during active picture
+    blank_o       : out std_logic    -- composite blanking (1 outside active + not sync)
   );
 end entity video_bram_top;
 
@@ -118,9 +120,12 @@ architecture rtl of video_bram_top is
   -- -----------------------------------------------------------------------
   -- Sync / active flags
   -- -----------------------------------------------------------------------
-  signal csync_s  : std_logic;
-  signal field_s  : std_logic;
-  signal active_s : std_logic;
+  signal csync_s       : std_logic;
+  signal field_s       : std_logic;
+  signal active_s      : std_logic;
+  signal in_vsync_s    : std_logic;   -- '1' during vsync broad-sync region
+  signal line_sync_s   : std_logic;   -- H sync pulse, suppressed during vsync
+  signal frame_sync_s  : std_logic;   -- V sync = in_vsync_s
 
   signal in_f1_active  : boolean;
   signal in_f2_active  : boolean;
@@ -625,15 +630,40 @@ begin
                   black_s;
 
   -- -----------------------------------------------------------------------
+  -- Separate line sync and frame sync
+  --
+  --  in_vsync_s  :  HIGH during the broad-sync (vsync) region of each field
+  --     PAL  F1: v =  0.. 7   PAL  F2: v = 312..319
+  --     NTSC F1: v =  0.. 4   NTSC F2: v = 263..267
+  --
+  --  line_sync_s :  H sync pulse, suppressed on vsync lines
+  --  frame_sync_s:  HIGH for the entire vsync region (= in_vsync_s)
+  -- -----------------------------------------------------------------------
+  in_vsync_s <= '1' when ntsc_mode = '0' and
+                          (v_cnt <= 7 or (v_cnt >= 312 and v_cnt <= 319))
+           else '1' when ntsc_mode = '1' and
+                          (v_cnt <= 4 or (v_cnt >= 263 and v_cnt <= 267))
+           else '0';
+
+  line_sync_s  <= '1' when h_cnt >= H_FRONT and
+                            h_cnt < H_FRONT + H_SYNC_W and
+                            in_vsync_s = '0'
+                  else '0';
+
+  frame_sync_s <= in_vsync_s;
+
+  -- -----------------------------------------------------------------------
   -- DAC output
   -- -----------------------------------------------------------------------
-  dac_out  <= "0000"       when csync_s  = '1' else
-              active_level when active_s = '1' else
-              "0100";
+  dac_out       <= "0000"       when csync_s  = '1' else
+                   active_level when active_s = '1' else
+                   "0100";
 
-  hsync_o  <= csync_s;
-  vsync_o  <= field_s;
-  active_o <= active_s;
-  blank_o  <= not csync_s and not active_s;
+  csync_o      <= csync_s;
+  line_sync_o  <= line_sync_s;
+  frame_sync_o <= frame_sync_s;
+  field_o      <= field_s;
+  active_o     <= active_s;
+  blank_o      <= not csync_s and not active_s;
 
 end architecture rtl;

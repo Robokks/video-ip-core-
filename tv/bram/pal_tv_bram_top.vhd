@@ -75,11 +75,13 @@ entity pal_tv_bram_top is
     -- Number of valid pixels in BRAM (address wraps here)
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
     -- Video outputs
-    dac_out      : out std_logic_vector(3 downto 0);
-    hsync_o      : out std_logic;   -- composite sync (1 = sync tip)
-    vsync_o      : out std_logic;   -- field indicator (0 = F1, 1 = F2)
-    active_o     : out std_logic;
-    blank_o      : out std_logic    -- HIGH during blanking pedestal
+    dac_out       : out std_logic_vector(3 downto 0);
+    csync_o       : out std_logic;   -- composite sync (H+V merged; 1 = sync tip)
+    line_sync_o   : out std_logic;   -- H sync only  (1 during hsync, never during vsync)
+    frame_sync_o  : out std_logic;   -- V sync pulse (1 during vsync broad-sync region)
+    field_o       : out std_logic;   -- field indicator (0 = F1, 1 = F2)
+    active_o      : out std_logic;   -- 1 during active picture
+    blank_o       : out std_logic    -- composite blanking (1 outside active + not sync)
   );
 end entity pal_tv_bram_top;
 
@@ -145,9 +147,13 @@ architecture rtl of pal_tv_bram_top is
   signal ce_s  : std_logic;
 
   -- Interlaced composite sync
-  signal csync_s  : std_logic;
-  signal field_s  : std_logic;
-  signal active_s : std_logic;
+  signal csync_s      : std_logic;
+  signal field_s      : std_logic;
+  signal active_s     : std_logic;
+  -- Separate line / frame sync
+  signal in_vsync_s   : std_logic;   -- HIGH during vsync broad-sync region
+  signal line_sync_s  : std_logic;   -- H sync pulse, suppressed during vsync
+  signal frame_sync_s : std_logic;   -- V sync = in_vsync_s
 
   signal in_f1_active  : boolean;
   signal in_f2_active  : boolean;
@@ -522,14 +528,36 @@ begin
                                   (sel_i = 1 and color_h = '1') else
                   black_s;
 
-  -- Blanking pedestal is always LEVEL_BLANK (TV standard; unaffected by black_lvl)
-  dac_out  <= LEVEL_SYNC   when csync_s = '1' else
-              active_level when active_s = '1' else
-              LEVEL_BLANK;
+  -- -----------------------------------------------------------------------
+  -- Separate line sync and frame sync
+  --
+  --  in_vsync_s  : HIGH during the PAL broad-sync (vsync) region
+  --     F1: v =  0.. 7   (5 pre-eq + 5 broad + 5 post-eq half-lines ≈ lines 0–7)
+  --     F2: v = 312..319
+  --
+  --  line_sync_s : H sync pulse only, suppressed during vsync lines
+  --  frame_sync_s: HIGH for the entire vsync region (one pulse per field)
+  -- -----------------------------------------------------------------------
+  in_vsync_s   <= '1' when (v_cnt <= 7) or (v_cnt >= 312 and v_cnt <= 319)
+                  else '0';
 
-  hsync_o  <= csync_s;
-  vsync_o  <= field_s;
-  active_o <= active_s;
-  blank_o  <= not csync_s and not active_s;
+  line_sync_s  <= '1' when h_cnt >= H_FRONT and
+                            h_cnt < H_FRONT + H_SYNC_W and
+                            in_vsync_s = '0'
+                  else '0';
+
+  frame_sync_s <= in_vsync_s;
+
+  -- Blanking pedestal is always LEVEL_BLANK (TV standard; unaffected by black_lvl)
+  dac_out       <= LEVEL_SYNC   when csync_s = '1' else
+                   active_level when active_s = '1' else
+                   LEVEL_BLANK;
+
+  csync_o      <= csync_s;
+  line_sync_o  <= line_sync_s;
+  frame_sync_o <= frame_sync_s;
+  field_o      <= field_s;
+  active_o     <= active_s;
+  blank_o      <= not csync_s and not active_s;
 
 end architecture rtl;

@@ -49,8 +49,9 @@ begin
       clk       => clk, rst => rst,
       ntsc_mode => '0',
       sel       => x"05",
-      dac_out   => dac_pal, hsync_o => cs_pal,
-      vsync_o   => open,   active_o => ac_pal, blank_o => open
+      dac_out      => dac_pal,  csync_o      => cs_pal,
+      line_sync_o  => open,    frame_sync_o => open,
+      field_o      => open,    active_o     => ac_pal,  blank_o => open
     );
 
   uut_ntsc : entity work.video_bram_top
@@ -59,8 +60,9 @@ begin
       clk       => clk, rst => rst,
       ntsc_mode => '1',
       sel       => x"05",
-      dac_out   => dac_ntsc, hsync_o => cs_ntsc,
-      vsync_o   => open,    active_o => ac_ntsc, blank_o => open
+      dac_out      => dac_ntsc, csync_o      => cs_ntsc,
+      line_sync_o  => open,    frame_sync_o => open,
+      field_o      => open,    active_o     => ac_ntsc, blank_o => open
     );
 
   -- Reset + run

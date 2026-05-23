@@ -55,8 +55,10 @@ begin
       rst      => rst,
       sel      => x"05",
       dac_out  => dac,
-      hsync_o  => open,
-      vsync_o  => fld,
+      csync_o      => open,
+      line_sync_o  => open,
+      frame_sync_o => open,
+      field_o      => fld,
       active_o => ac,
       blank_o  => open
     );
