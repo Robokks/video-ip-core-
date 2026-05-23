@@ -1,0 +1,252 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+-- PAL B&W Zone Test Pattern -- Option 1: CRT-50 (50 Hz progressive, non-interlaced)
+--
+-- Why this works on CRTs:
+--   H frequency = 640 clk * 10 MHz = 64 us -> 15,625 Hz  (standard PAL H)
+--   V frequency = 312 lines * 64 us = 19.97 ms -> 50.08 Hz  (standard PAL V)
+--   CRT sync circuits lock to both; most modern TVs with composite input also accept it.
+--
+-- Compared with opt3_prog25 (625 lines @ 25 Hz):
+--   - Half the active lines (288 vs 576) but doubled frame rate (50 vs 25 Hz)
+--   - No flicker / field interleaving artefacts on CRTs
+--   - Simpler vsync (3 full lines) -- CRT integrator still sums enough energy
+--
+-- Four selectable patterns (sel input):
+--   0  VERTICAL bars    8 zones across 520 px (STRIPE/WHITE/STRIPE/WHITE/BLACK/STRIPE/WHITE/STRIPE)
+--   1  HORIZONTAL bars  8 zones across 288 lines
+--   2  HORIZONTAL gradient  10 grey zones left-to-right
+--   3  VERTICAL gradient    10 grey zones top-to-bottom
+--
+-- No runtime division or multiplication -- all counters are incremental.
+entity pal_tv_crt50_top is
+  generic (
+    H_FRONT    : integer := 16;
+    H_SYNC_W   : integer := 47;
+    H_BACK     : integer := 57;
+    H_ACTIVE   : integer := 520;
+    H_TOTAL    : integer := 640;
+    V_SYNC_L   : integer := 3;    -- 3 broad-sync lines  (was 5 in opt3)
+    V_BACK_L   : integer := 18;   -- V back porch lines  (was 20 in opt3)
+    V_ACTIVE_L : integer := 288;  -- 288 active lines @ 50 Hz
+    V_TOTAL    : integer := 312;  -- 312 lines/frame -> 50.08 Hz
+    LEVEL_SYNC  : std_logic_vector(3 downto 0) := "0000";
+    LEVEL_BLANK : std_logic_vector(3 downto 0) := "0100";
+    LEVEL_WHITE : std_logic_vector(3 downto 0) := "1111";
+    CLK_MHZ     : integer := 40;
+    STRIPE_W    : integer := 4
+  );
+  port (
+    clk      : in  std_logic;
+    rst      : in  std_logic;
+    sel      : in  std_logic_vector(7 downto 0);  -- pattern select
+    dac_out  : out std_logic_vector(3 downto 0);
+    hsync_o  : out std_logic;
+    vsync_o  : out std_logic;
+    active_o : out std_logic
+  );
+end entity pal_tv_crt50_top;
+
+architecture rtl of pal_tv_crt50_top is
+
+  constant H_ACT_S   : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
+  constant V_ACT_S   : integer := V_SYNC_L + V_BACK_L;           -- 21
+
+  constant NUM_ZONES : integer := 8;
+  constant ZONE_W    : integer := H_ACTIVE   / NUM_ZONES;  -- 65
+  constant ZONE_H    : integer := V_ACTIVE_L / NUM_ZONES;  -- 36  (288/8)
+
+  type zone_kind    is (Z_BLACK, Z_WHITE, Z_STRIPE);
+  type zone_table_t is array (0 to NUM_ZONES - 1) of zone_kind;
+  constant ZONE_TABLE : zone_table_t := (
+    0 => Z_STRIPE, 1 => Z_WHITE,  2 => Z_STRIPE, 3 => Z_WHITE,
+    4 => Z_BLACK,  5 => Z_STRIPE, 6 => Z_WHITE,  7 => Z_STRIPE
+  );
+
+  constant GZONES   : integer := 10;
+  constant GZONE_W  : integer := H_ACTIVE   / GZONES;  -- 52
+  constant GZONE_H  : integer := V_ACTIVE_L / GZONES;  -- 28
+
+  type grad_table_t is array (0 to GZONES - 1) of std_logic_vector(3 downto 0);
+  constant GRAD_TABLE : grad_table_t := (
+    0 => "0100", 1 => "0101", 2 => "0110", 3 => "1000", 4 => "1001",
+    5 => "1010", 6 => "1011", 7 => "1101", 8 => "1110", 9 => "1111"
+  );
+
+  signal h_cnt : integer range 0 to 639;
+  signal v_cnt : integer range 0 to 624;
+  signal ce_s  : std_logic;
+
+  signal hsync_s  : std_logic;
+  signal vsync_s  : std_logic;
+  signal active_s : std_logic;
+  signal blank_s  : std_logic;
+
+  signal zone_idx_v   : integer range 0 to NUM_ZONES - 1 := 0;
+  signal px_in_zone   : integer range 0 to ZONE_W - 1     := 0;
+  signal stripe_cnt_v : integer range 0 to STRIPE_W - 1   := 0;
+  signal stripe_ph_v  : std_logic                         := '0';
+
+  signal zone_idx_h   : integer range 0 to NUM_ZONES - 1 := 0;
+  signal line_in_zone : integer range 0 to ZONE_H - 1     := 0;
+  signal stripe_cnt_h : integer range 0 to STRIPE_W - 1   := 0;
+  signal stripe_ph_h  : std_logic                         := '0';
+
+  signal gzx_idx : integer range 0 to GZONES - 1  := 0;
+  signal gpx_in  : integer range 0 to GZONE_W - 1 := 0;
+
+  signal gzy_idx : integer range 0 to GZONES - 1  := 0;
+  signal gln_in  : integer range 0 to GZONE_H - 1 := 0;
+
+  signal color_v      : std_logic;
+  signal color_h      : std_logic;
+  signal sel_i        : integer range 0 to 255;
+  signal active_level : std_logic_vector(3 downto 0);
+
+begin
+
+  assert NUM_ZONES * ZONE_W = H_ACTIVE
+    report "NUM_ZONES * ZONE_W /= H_ACTIVE" severity failure;
+  assert NUM_ZONES * ZONE_H = V_ACTIVE_L
+    report "NUM_ZONES * ZONE_H /= V_ACTIVE_L (need 288/8=36)" severity failure;
+  assert GZONES * GZONE_W = H_ACTIVE
+    report "GZONES * GZONE_W /= H_ACTIVE" severity failure;
+
+  sel_i <= to_integer(unsigned(sel));
+
+  u_timing : entity work.pal_timing
+    generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL, CLK_MHZ => CLK_MHZ)
+    port map (clk => clk, rst => rst, ce => ce_s,
+              h_cnt => h_cnt, v_cnt => v_cnt);
+
+  u_sync : entity work.pal_sync_gen
+    generic map (
+      H_FRONT => H_FRONT, H_SYNC_W => H_SYNC_W, H_BACK => H_BACK,
+      H_ACTIVE => H_ACTIVE, H_TOTAL => H_TOTAL,
+      V_SYNC_L => V_SYNC_L, V_BACK_L => V_BACK_L,
+      V_ACTIVE_L => V_ACTIVE_L, V_TOTAL => V_TOTAL)
+    port map (h_cnt => h_cnt, v_cnt => v_cnt,
+              hsync => hsync_s, vsync => vsync_s,
+              active => active_s, blank => blank_s);
+
+  -- Vertical bar generator (resets each active line)
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        zone_idx_v <= 0; px_in_zone <= 0; stripe_cnt_v <= 0; stripe_ph_v <= '0';
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and
+           v_cnt >= V_ACT_S and v_cnt < V_ACT_S + V_ACTIVE_L then
+          zone_idx_v <= 0; px_in_zone <= 0; stripe_cnt_v <= 0; stripe_ph_v <= '0';
+        elsif active_s = '1' then
+          if px_in_zone = ZONE_W - 1 then
+            if zone_idx_v < NUM_ZONES - 1 then zone_idx_v <= zone_idx_v + 1; end if;
+            px_in_zone <= 0; stripe_cnt_v <= 0; stripe_ph_v <= '0';
+          else
+            px_in_zone <= px_in_zone + 1;
+            if stripe_cnt_v = STRIPE_W - 1 then
+              stripe_cnt_v <= 0; stripe_ph_v <= not stripe_ph_v;
+            else
+              stripe_cnt_v <= stripe_cnt_v + 1;
+            end if;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- Horizontal bar generator (resets each frame)
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
+      elsif ce_s = '1' then
+        if v_cnt = V_ACT_S - 1 and h_cnt = H_TOTAL - 1 then
+          zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
+        elsif v_cnt >= V_ACT_S and v_cnt < V_ACT_S + V_ACTIVE_L and
+              h_cnt = H_TOTAL - 1 then
+          if line_in_zone = ZONE_H - 1 then
+            if zone_idx_h < NUM_ZONES - 1 then zone_idx_h <= zone_idx_h + 1; end if;
+            line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
+          else
+            line_in_zone <= line_in_zone + 1;
+            if stripe_cnt_h = STRIPE_W - 1 then
+              stripe_cnt_h <= 0; stripe_ph_h <= not stripe_ph_h;
+            else
+              stripe_cnt_h <= stripe_cnt_h + 1;
+            end if;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- Horizontal gradient generator
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        gzx_idx <= 0; gpx_in <= 0;
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and
+           v_cnt >= V_ACT_S and v_cnt < V_ACT_S + V_ACTIVE_L then
+          gzx_idx <= 0; gpx_in <= 0;
+        elsif active_s = '1' then
+          if gpx_in = GZONE_W - 1 then
+            if gzx_idx < GZONES - 1 then gzx_idx <= gzx_idx + 1; end if;
+            gpx_in <= 0;
+          else
+            gpx_in <= gpx_in + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- Vertical gradient generator
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        gzy_idx <= 0; gln_in <= 0;
+      elsif ce_s = '1' then
+        if v_cnt = V_ACT_S - 1 and h_cnt = H_TOTAL - 1 then
+          gzy_idx <= 0; gln_in <= 0;
+        elsif v_cnt >= V_ACT_S and v_cnt < V_ACT_S + V_ACTIVE_L and
+              h_cnt = H_TOTAL - 1 then
+          if gln_in = GZONE_H - 1 then
+            if gzy_idx < GZONES - 1 then gzy_idx <= gzy_idx + 1; end if;
+            gln_in <= 0;
+          else
+            gln_in <= gln_in + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  with ZONE_TABLE(zone_idx_v) select
+    color_v <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_v when Z_STRIPE;
+  with ZONE_TABLE(zone_idx_h) select
+    color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
+
+  active_level <= GRAD_TABLE(gzx_idx) when sel_i = 2 else
+                  GRAD_TABLE(gzy_idx) when sel_i = 3 else
+                  LEVEL_WHITE when (sel_i = 0 and color_v = '1') or
+                                   (sel_i = 1 and color_h = '1') else
+                  LEVEL_BLANK;
+
+  dac_out <= LEVEL_SYNC   when vsync_s = '1' else
+             LEVEL_SYNC   when hsync_s = '1' else
+             active_level when active_s = '1' else
+             LEVEL_BLANK;
+
+  hsync_o  <= hsync_s;
+  vsync_o  <= vsync_s;
+  active_o <= active_s;
+
+end architecture rtl;
