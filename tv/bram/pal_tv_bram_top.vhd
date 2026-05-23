@@ -13,6 +13,7 @@ use ieee.numeric_std.all;
 -- sel 3  Vertical gradient    (10 grey steps)
 -- sel 4  BRAM pixel source    (Boolean: 0 = black_lvl, 1 = brightness)
 -- sel 5  Bouncing ball        (white rectangle on black background, no BRAM needed)
+-- sel 6  Text overlay         (8x8 bitmap font, three centred lines, white on black)
 --
 -- BRAM write port (host side, independent of pixel clock):
 --   bram_wr_en   pulse '1' for one clock to write one pixel
@@ -113,6 +114,140 @@ architecture rtl of pal_tv_bram_top is
   constant BALL_H  : integer := 50;   -- ball height (screen rows)
 
   -- -----------------------------------------------------------------------
+  -- Text overlay (sel = 6): 8x8 bitmap font, ASCII 32..126
+  -- -----------------------------------------------------------------------
+  constant FONT_W   : integer := 8;
+  constant FONT_H   : integer := 8;
+  constant TCOLS    : integer := H_ACTIVE / FONT_W;  -- 65 columns
+  constant TROWS    : integer := 576      / FONT_H;  -- 72 rows
+
+  -- Three centred message lines (each exactly MSG_LEN characters)
+  constant MSG_LEN  : integer := 21;
+  constant MSG_COL  : integer := (TCOLS - MSG_LEN) / 2;  -- (65-21)/2 = 22
+  constant MSG_ROW0 : integer := 34;   -- screen text row for line 0 (y=272)
+  constant MSG_ROW1 : integer := 36;   -- screen text row for line 1 (y=288, centre)
+  constant MSG_ROW2 : integer := 38;   -- screen text row for line 2 (y=304)
+
+  -- Font ROM: 95 characters (ASCII 32..126), 8 rows each.
+  -- Index = (ascii_code - 32) * FONT_H + scan_line → 8 pixel bits (bit7 = left)
+  type font_rom_t is array (0 to 95 * FONT_H - 1) of std_logic_vector(7 downto 0);
+  constant FONT_ROM : font_rom_t := (
+    x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"00", -- 32 ' '
+    x"18",x"3C",x"3C",x"18",x"18",x"00",x"18",x"00", -- 33 !
+    x"66",x"66",x"24",x"00",x"00",x"00",x"00",x"00", -- 34 "
+    x"6C",x"6C",x"FE",x"6C",x"FE",x"6C",x"6C",x"00", -- 35 #
+    x"18",x"3E",x"60",x"3C",x"06",x"7C",x"18",x"00", -- 36 $
+    x"00",x"C6",x"CC",x"18",x"30",x"66",x"C6",x"00", -- 37 %
+    x"38",x"6C",x"38",x"76",x"DC",x"CC",x"76",x"00", -- 38 &
+    x"18",x"18",x"30",x"00",x"00",x"00",x"00",x"00", -- 39 '
+    x"0E",x"1C",x"38",x"38",x"38",x"1C",x"0E",x"00", -- 40 (
+    x"70",x"38",x"1C",x"1C",x"1C",x"38",x"70",x"00", -- 41 )
+    x"00",x"66",x"3C",x"FF",x"3C",x"66",x"00",x"00", -- 42 *
+    x"00",x"18",x"18",x"7E",x"18",x"18",x"00",x"00", -- 43 +
+    x"00",x"00",x"00",x"00",x"00",x"18",x"18",x"30", -- 44 ,
+    x"00",x"00",x"00",x"7E",x"00",x"00",x"00",x"00", -- 45 -
+    x"00",x"00",x"00",x"00",x"00",x"18",x"18",x"00", -- 46 .
+    x"06",x"0C",x"18",x"30",x"60",x"C0",x"80",x"00", -- 47 /
+    x"7C",x"C6",x"CE",x"DE",x"F6",x"E6",x"7C",x"00", -- 48 0
+    x"30",x"70",x"30",x"30",x"30",x"30",x"FC",x"00", -- 49 1
+    x"78",x"CC",x"0C",x"38",x"60",x"CC",x"FC",x"00", -- 50 2
+    x"78",x"CC",x"0C",x"38",x"0C",x"CC",x"78",x"00", -- 51 3
+    x"1C",x"3C",x"6C",x"CC",x"FE",x"0C",x"1E",x"00", -- 52 4
+    x"FC",x"C0",x"F8",x"0C",x"0C",x"CC",x"78",x"00", -- 53 5
+    x"38",x"60",x"C0",x"F8",x"CC",x"CC",x"78",x"00", -- 54 6
+    x"FC",x"CC",x"0C",x"18",x"30",x"30",x"30",x"00", -- 55 7
+    x"78",x"CC",x"CC",x"78",x"CC",x"CC",x"78",x"00", -- 56 8
+    x"78",x"CC",x"CC",x"7C",x"0C",x"18",x"70",x"00", -- 57 9
+    x"00",x"18",x"18",x"00",x"00",x"18",x"18",x"00", -- 58 :
+    x"00",x"18",x"18",x"00",x"00",x"18",x"18",x"30", -- 59 ;
+    x"0E",x"1C",x"38",x"70",x"38",x"1C",x"0E",x"00", -- 60 <
+    x"00",x"00",x"7E",x"00",x"00",x"7E",x"00",x"00", -- 61 =
+    x"70",x"38",x"1C",x"0E",x"1C",x"38",x"70",x"00", -- 62 >
+    x"3C",x"66",x"0C",x"18",x"18",x"00",x"18",x"00", -- 63 ?
+    x"7C",x"C6",x"DE",x"DE",x"DE",x"C0",x"7C",x"00", -- 64 @
+    x"30",x"78",x"CC",x"CC",x"FC",x"CC",x"CC",x"00", -- 65 A
+    x"FC",x"66",x"66",x"7C",x"66",x"66",x"FC",x"00", -- 66 B
+    x"3C",x"66",x"C0",x"C0",x"C0",x"66",x"3C",x"00", -- 67 C
+    x"F8",x"6C",x"66",x"66",x"66",x"6C",x"F8",x"00", -- 68 D
+    x"FE",x"62",x"68",x"78",x"68",x"62",x"FE",x"00", -- 69 E
+    x"FE",x"62",x"68",x"78",x"68",x"60",x"F0",x"00", -- 70 F
+    x"3C",x"66",x"C0",x"C0",x"CE",x"66",x"3E",x"00", -- 71 G
+    x"CC",x"CC",x"CC",x"FC",x"CC",x"CC",x"CC",x"00", -- 72 H
+    x"78",x"30",x"30",x"30",x"30",x"30",x"78",x"00", -- 73 I
+    x"1E",x"0C",x"0C",x"0C",x"CC",x"CC",x"78",x"00", -- 74 J
+    x"E6",x"66",x"6C",x"78",x"6C",x"66",x"E6",x"00", -- 75 K
+    x"F0",x"60",x"60",x"60",x"62",x"66",x"FE",x"00", -- 76 L
+    x"C6",x"EE",x"FE",x"FE",x"D6",x"C6",x"C6",x"00", -- 77 M
+    x"C6",x"E6",x"F6",x"DE",x"CE",x"C6",x"C6",x"00", -- 78 N
+    x"38",x"6C",x"C6",x"C6",x"C6",x"6C",x"38",x"00", -- 79 O
+    x"FC",x"66",x"66",x"7C",x"60",x"60",x"F0",x"00", -- 80 P
+    x"78",x"CC",x"CC",x"CC",x"DC",x"78",x"1C",x"00", -- 81 Q
+    x"FC",x"66",x"66",x"7C",x"6C",x"66",x"E6",x"00", -- 82 R
+    x"78",x"CC",x"E0",x"70",x"1C",x"CC",x"78",x"00", -- 83 S
+    x"FC",x"B4",x"30",x"30",x"30",x"30",x"78",x"00", -- 84 T
+    x"CC",x"CC",x"CC",x"CC",x"CC",x"CC",x"FC",x"00", -- 85 U
+    x"CC",x"CC",x"CC",x"CC",x"CC",x"78",x"30",x"00", -- 86 V
+    x"C6",x"C6",x"C6",x"D6",x"FE",x"EE",x"C6",x"00", -- 87 W
+    x"C6",x"C6",x"6C",x"38",x"6C",x"C6",x"C6",x"00", -- 88 X
+    x"CC",x"CC",x"CC",x"78",x"30",x"30",x"78",x"00", -- 89 Y
+    x"FE",x"C6",x"8C",x"18",x"32",x"66",x"FE",x"00", -- 90 Z
+    x"3C",x"30",x"30",x"30",x"30",x"30",x"3C",x"00", -- 91 [
+    x"C0",x"60",x"30",x"18",x"0C",x"06",x"02",x"00", -- 92 \
+    x"3C",x"0C",x"0C",x"0C",x"0C",x"0C",x"3C",x"00", -- 93 ]
+    x"10",x"38",x"6C",x"C6",x"00",x"00",x"00",x"00", -- 94 ^
+    x"00",x"00",x"00",x"00",x"00",x"00",x"00",x"FF", -- 95 _
+    x"30",x"30",x"18",x"00",x"00",x"00",x"00",x"00", -- 96 `
+    x"00",x"00",x"78",x"0C",x"7C",x"CC",x"76",x"00", -- 97 a
+    x"E0",x"60",x"60",x"7C",x"66",x"66",x"DC",x"00", -- 98 b
+    x"00",x"00",x"78",x"CC",x"C0",x"CC",x"78",x"00", -- 99 c
+    x"1C",x"0C",x"0C",x"7C",x"CC",x"CC",x"76",x"00", -- 100 d
+    x"00",x"00",x"78",x"CC",x"FC",x"C0",x"78",x"00", -- 101 e
+    x"38",x"6C",x"60",x"F0",x"60",x"60",x"F0",x"00", -- 102 f
+    x"00",x"00",x"76",x"CC",x"CC",x"7C",x"0C",x"F8", -- 103 g
+    x"E0",x"60",x"6C",x"76",x"66",x"66",x"E6",x"00", -- 104 h
+    x"30",x"00",x"70",x"30",x"30",x"30",x"78",x"00", -- 105 i
+    x"0C",x"00",x"0C",x"0C",x"0C",x"CC",x"CC",x"78", -- 106 j
+    x"E0",x"60",x"66",x"6C",x"78",x"6C",x"E6",x"00", -- 107 k
+    x"70",x"30",x"30",x"30",x"30",x"30",x"78",x"00", -- 108 l
+    x"00",x"00",x"CC",x"FE",x"FE",x"D6",x"C6",x"00", -- 109 m
+    x"00",x"00",x"F8",x"CC",x"CC",x"CC",x"CC",x"00", -- 110 n
+    x"00",x"00",x"78",x"CC",x"CC",x"CC",x"78",x"00", -- 111 o
+    x"00",x"00",x"DC",x"66",x"66",x"7C",x"60",x"F0", -- 112 p
+    x"00",x"00",x"76",x"CC",x"CC",x"7C",x"0C",x"1E", -- 113 q
+    x"00",x"00",x"DC",x"76",x"66",x"60",x"F0",x"00", -- 114 r
+    x"00",x"00",x"7C",x"C0",x"78",x"0C",x"F8",x"00", -- 115 s
+    x"10",x"30",x"7C",x"30",x"30",x"34",x"18",x"00", -- 116 t
+    x"00",x"00",x"CC",x"CC",x"CC",x"CC",x"76",x"00", -- 117 u
+    x"00",x"00",x"CC",x"CC",x"CC",x"78",x"30",x"00", -- 118 v
+    x"00",x"00",x"C6",x"D6",x"FE",x"FE",x"6C",x"00", -- 119 w
+    x"00",x"00",x"C6",x"6C",x"38",x"6C",x"C6",x"00", -- 120 x
+    x"00",x"00",x"CC",x"CC",x"CC",x"7C",x"0C",x"F8", -- 121 y
+    x"00",x"00",x"FC",x"98",x"30",x"64",x"FC",x"00", -- 122 z
+    x"1C",x"30",x"30",x"E0",x"30",x"30",x"1C",x"00", -- 123 {
+    x"18",x"18",x"18",x"00",x"18",x"18",x"18",x"00", -- 124 |
+    x"E0",x"30",x"30",x"1C",x"30",x"30",x"E0",x"00", -- 125 }
+    x"76",x"DC",x"00",x"00",x"00",x"00",x"00",x"00"  -- 126 ~
+  );
+
+  -- Returns ASCII code for character at text-grid position (cx, cy).
+  -- Returns 32 (space = blank) outside the three message rows.
+  function txt_char_at (cx, cy : integer) return integer is
+    constant M0 : string(1 to MSG_LEN) := "PAL 625/50 INTERLACED";
+    constant M1 : string(1 to MSG_LEN) := "  FPGA VIDEO IP CORE ";
+    constant M2 : string(1 to MSG_LEN) := "   SELECTION 6 TEXT  ";
+    variable col : integer;
+  begin
+    col := cx - MSG_COL;
+    if col >= 0 and col < MSG_LEN then
+      if    cy = MSG_ROW0 then return character'pos(M0(col + 1));
+      elsif cy = MSG_ROW1 then return character'pos(M1(col + 1));
+      elsif cy = MSG_ROW2 then return character'pos(M2(col + 1));
+      end if;
+    end if;
+    return 32;
+  end function;
+
+  -- -----------------------------------------------------------------------
   -- 1-bit BRAM  (Vivado: infer Block RAM via ram_style attribute)
   -- -----------------------------------------------------------------------
   type bram_t is array (0 to BRAM_DEPTH - 1) of std_logic;
@@ -136,6 +271,15 @@ architecture rtl of pal_tv_bram_top is
   signal ball_vx  : integer := 3;   -- horizontal velocity (pixels / frame)
   signal ball_vy  : integer := 2;   -- vertical   velocity (rows   / frame)
   signal ball_on  : std_logic := '0';
+
+  -- Text rendering intermediates (sel = 6)
+  signal txt_char_x   : integer := 0;   -- character column (0..TCOLS-1)
+  signal txt_char_y   : integer := 0;   -- character row    (0..TROWS-1)
+  signal txt_bit_x    : integer := 0;   -- pixel within char, H (0..7)
+  signal txt_bit_y    : integer := 0;   -- scan line within char (0..7)
+  signal txt_asc      : integer := 32;  -- ASCII code of current char
+  signal txt_rom_addr : integer := 0;   -- index into FONT_ROM (0..759)
+  signal txt_pixel    : std_logic := '0';
 
   -- H/V counters
   signal h_cnt : integer range 0 to 639;
@@ -410,6 +554,20 @@ begin
              else '0';
 
   -- -----------------------------------------------------------------------
+  -- Text overlay (sel = 6): pipeline of combinational lookups
+  --   screen_x/y → char grid position → ASCII code → font row → pixel bit
+  -- All signals are combinational (no clock); settles well within 10 MHz period.
+  -- -----------------------------------------------------------------------
+  txt_char_x   <= screen_x / FONT_W;
+  txt_char_y   <= screen_y / FONT_H;
+  txt_bit_x    <= screen_x mod FONT_W;
+  txt_bit_y    <= screen_y mod FONT_H;
+  txt_asc      <= txt_char_at(txt_char_x, txt_char_y);
+  txt_rom_addr <= (txt_asc - 32) * FONT_H + txt_bit_y
+                  when txt_asc >= 32 and txt_asc <= 126 else 0;
+  txt_pixel    <= FONT_ROM(txt_rom_addr)(FONT_W - 1 - txt_bit_x);
+
+  -- -----------------------------------------------------------------------
   -- BRAM: synchronous write, asynchronous read
   -- -----------------------------------------------------------------------
   -- Clamp bram_len to [1 .. BRAM_DEPTH]; 0 or overflow → use full depth
@@ -511,8 +669,10 @@ begin
     color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
 
   active_level <= bram_level when sel_i = 4 else
-                  white_s    when sel_i = 5 and ball_on = '1' else
+                  white_s    when sel_i = 5 and ball_on  = '1' else
                   black_s    when sel_i = 5 else
+                  white_s    when sel_i = 6 and txt_pixel = '1' else
+                  black_s    when sel_i = 6 else
                   grad_x_s   when sel_i = 2 else
                   grad_y_s   when sel_i = 3 else
                   white_s    when (sel_i = 0 and color_v = '1') or
