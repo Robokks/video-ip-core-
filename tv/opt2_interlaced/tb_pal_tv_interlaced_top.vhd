@@ -71,7 +71,7 @@ begin
               blank_o => open);
   uut1 : entity work.pal_tv_interlaced_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
-    port map (clk => clk, rst => rst, sel => x"00", contrast => x"6",
+    port map (clk => clk, rst => rst, sel => x"00", brightness => x"6",
               dac_out => dac1_lo, hsync_o => cs1_lo, vsync_o => fld1_lo, active_o => ac1_lo,
               blank_o => open);
 

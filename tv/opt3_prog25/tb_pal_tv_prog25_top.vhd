@@ -88,7 +88,7 @@ begin
               dac_out=>dac3, hsync_o=>hs3, vsync_o=>vs3, active_o=>ac3, blank_o=>open);
   uut4 : entity work.pal_tv_prog25_top
     generic map (CLK_MHZ => 10, STRIPE_W => STRIPE_W)
-    port map (clk=>clk, rst=>rst, sel=>x"00", contrast=>x"6",
+    port map (clk=>clk, rst=>rst, sel=>x"00", brightness=>x"6",
               dac_out=>dac4, hsync_o=>hs4, vsync_o=>vs4, active_o=>ac4, blank_o=>open);
 
   process
