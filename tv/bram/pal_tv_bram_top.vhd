@@ -19,19 +19,28 @@ use ieee.numeric_std.all;
 --   bram_wr_data 1-bit pixel value
 --
 -- bram_len (runtime input):
---   Number of valid pixels stored.  The read address wraps at this boundary.
---   bram_len = 520          one line, repeated on every active line
---   bram_len = 149760       field-1 content (288 * 520), repeated on field 2
---   bram_len = 299520       full unique frame (520 * 576)
+--   Number of valid pixels stored in BRAM.  The read address wraps at this boundary.
+--   bram_len = 520    one row, repeated on every active line (simple test card)
+--   bram_len = 1040   two rows (one row-pair), repeated every row-pair
+--   bram_len = 299520 full frame  (520 * 576 = all 576 image rows)
 --
--- BRAM address layout (sel = 4):
---   addr 0 .. 519             line 0 of F1  (v = 24)
---   addr 520 .. 1039          line 1 of F1  (v = 25)
+-- BRAM address layout (sel = 4) — natural sequential row order:
+--   Write image rows 0, 1, 2, … 575 into BRAM sequentially;
+--   the hardware automatically routes each row to the correct interlaced field.
+--
+--   addr       0 ..     519   image row  0  (F1 line 0,  screen row  0)
+--   addr     520 ..    1039   image row  1  (F2 line 0,  screen row  1)
+--   addr    1040 ..    1559   image row  2  (F1 line 1,  screen row  2)
+--   addr    1560 ..    2079   image row  3  (F2 line 1,  screen row  3)
 --   ...
---   addr 149760 .. 149760+519 line 0 of F2  (v = 336, only if bram_len > 149760)
+--   addr k*1040      .. k*1040+519   image row 2k   (F1 line k, screen row 2k)
+--   addr k*1040+520  .. k*1040+1039  image row 2k+1 (F2 line k, screen row 2k+1)
+--   ...
+--   addr 299000 .. 299519  image row 575 (F2 line 287, screen row 575)
 --
--- Address counter resets at the start of field-1 active region each frame.
--- Field 2 continues from where field 1 left off (correct for full-frame BRAM).
+-- Address generator: bram_rd_line_base + bram_px_cnt.
+--   bram_rd_line_base advances by 2*H_ACTIVE after each active line (interlace stride).
+--   F2 field starts with bram_rd_line_base = H_ACTIVE (image row 1).
 --
 -- Xilinx BRAM inference:
 --   The bram_mem signal carries a "ram_style = block" attribute so Vivado
@@ -106,10 +115,13 @@ architecture rtl of pal_tv_bram_top is
   attribute ram_style          : string;
   attribute ram_style of bram_mem : signal is "block";
 
-  signal bram_rd_addr  : integer range 0 to BRAM_DEPTH - 1 := 0;
-  signal bram_pixel    : std_logic;
-  signal bram_len_i    : integer range 1 to BRAM_DEPTH;
-  signal bram_level    : std_logic_vector(3 downto 0);
+  signal bram_rd_line_base : integer := 0;               -- BRAM start addr of current active line
+  signal bram_px_cnt  : integer range 0 to H_ACTIVE - 1 := 0;  -- pixel offset within line
+  signal bram_rd_sum  : integer := 0;                    -- line_base + px_cnt (combinational)
+  signal bram_rd_addr : integer range 0 to BRAM_DEPTH - 1 := 0;
+  signal bram_pixel   : std_logic;
+  signal bram_len_i   : integer range 1 to BRAM_DEPTH;
+  signal bram_level   : std_logic_vector(3 downto 0);
 
   -- H/V counters
   signal h_cnt : integer range 0 to 639;
@@ -307,26 +319,40 @@ begin
     end if;
   end process;
 
-  -- Read address counter: resets at frame start (F1 line 23 end),
-  -- increments each active pixel, wraps at bram_len_i
+  -- Natural sequential row address generator.
+  --   F1 reads even image rows (0, 2, 4, …);  F2 reads odd rows (1, 3, 5, …).
+  --   bram_rd_line_base: BRAM start address of the current active line.
+  --   bram_px_cnt:       pixel offset within the active line (0 .. H_ACTIVE-1).
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
-        bram_rd_addr <= 0;
+        bram_rd_line_base <= 0;
+        bram_px_cnt       <= 0;
       elsif ce_s = '1' then
+        -- F1 frame start: line 0 → image row 0 (addr 0)
         if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
-          bram_rd_addr <= 0;                          -- reset at frame boundary
+          bram_rd_line_base <= 0;
+          bram_px_cnt       <= 0;
+        -- F2 field start: line 0 → image row 1 (addr H_ACTIVE = 520)
+        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+          bram_rd_line_base <= H_ACTIVE;
+          bram_px_cnt       <= 0;
+        -- End of any other active line: stride by 2 rows (interlace step)
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          bram_rd_line_base <= bram_rd_line_base + 2 * H_ACTIVE;
+          bram_px_cnt       <= 0;
+        -- Within active region: advance pixel counter
         elsif active_s = '1' then
-          if bram_rd_addr >= bram_len_i - 1 then
-            bram_rd_addr <= 0;                        -- wrap at bram_len_i
-          else
-            bram_rd_addr <= bram_rd_addr + 1;
-          end if;
+          bram_px_cnt <= bram_px_cnt + 1;
         end if;
       end if;
     end if;
   end process;
+
+  -- Combinational address: sum clamped to [0, bram_len_i)
+  bram_rd_sum  <= bram_rd_line_base + bram_px_cnt;
+  bram_rd_addr <= bram_rd_sum when bram_rd_sum < bram_len_i else 0;
 
   -- Asynchronous read (1-bit pixel)
   bram_pixel <= bram_mem(bram_rd_addr);
