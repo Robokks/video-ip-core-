@@ -12,6 +12,7 @@ use ieee.numeric_std.all;
 -- sel 2  Horizontal gradient  (10 grey steps)
 -- sel 3  Vertical gradient    (10 grey steps)
 -- sel 4  BRAM pixel source    (Boolean: 0 = black_lvl, 1 = brightness)
+-- sel 5  Bouncing ball        (white rectangle on black background, no BRAM needed)
 --
 -- BRAM write port (host side, independent of pixel clock):
 --   bram_wr_en   pulse '1' for one clock to write one pixel
@@ -107,6 +108,10 @@ architecture rtl of pal_tv_bram_top is
   constant GZONE_W : integer := H_ACTIVE  / GZONES;   -- 52
   constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28
 
+  -- Bouncing ball (sel = 5)
+  constant BALL_W  : integer := 60;   -- ball width  (pixels)
+  constant BALL_H  : integer := 50;   -- ball height (screen rows)
+
   -- -----------------------------------------------------------------------
   -- 1-bit BRAM  (Vivado: infer Block RAM via ram_style attribute)
   -- -----------------------------------------------------------------------
@@ -122,6 +127,15 @@ architecture rtl of pal_tv_bram_top is
   signal bram_pixel   : std_logic;
   signal bram_len_i   : integer range 1 to BRAM_DEPTH;
   signal bram_level   : std_logic_vector(3 downto 0);
+
+  -- Animation: bouncing ball (sel = 5)
+  signal screen_x : integer := 0;   -- pixel column within active line (0..H_ACTIVE-1)
+  signal screen_y : integer := 0;   -- screen row (0..575; even = F1, odd = F2)
+  signal ball_x   : integer := 0;   -- ball left  edge (0 .. H_ACTIVE - BALL_W)
+  signal ball_y   : integer := 0;   -- ball top   edge (0 .. 576 - BALL_H)
+  signal ball_vx  : integer := 3;   -- horizontal velocity (pixels / frame)
+  signal ball_vy  : integer := 2;   -- vertical   velocity (rows   / frame)
+  signal ball_on  : std_logic := '0';
 
   -- H/V counters
   signal h_cnt : integer range 0 to 639;
@@ -300,6 +314,102 @@ begin
   end process;
 
   -- -----------------------------------------------------------------------
+  -- Animation: screen pixel-X counter
+  --   Resets to 0 at the clock before the first active pixel on each line.
+  --   Holds current column index while active_s = '1'.
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        screen_x <= 0;
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and in_any_active then
+          screen_x <= 0;          -- pre-load: next clock is first active pixel
+        elsif active_s = '1' then
+          screen_x <= screen_x + 1;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Animation: screen row-Y counter
+  --   F1 line k → screen row 2k (even), F2 line k → screen row 2k+1 (odd).
+  --   Pre-loaded one line before the first active line of each field so that
+  --   screen_y = 0 during F1 line 0 and screen_y = 1 during F2 line 0.
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        screen_y <= 0;
+      elsif ce_s = '1' then
+        if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
+          screen_y <= 0;              -- F1 line 0 = screen row 0
+        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+          screen_y <= 1;              -- F2 line 0 = screen row 1
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          screen_y <= screen_y + 2;   -- interlace: skip one row per active line
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
+  -- Animation: ball physics  (updated once per frame at end of F2)
+  --   Position is clamped by elastic bounce: reflect velocity on wall contact.
+  -- -----------------------------------------------------------------------
+  process(clk)
+    variable nx, ny, nvx, nvy : integer;
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        ball_x  <= 0;
+        ball_y  <= 0;
+        ball_vx <= 3;
+        ball_vy <= 2;
+      elsif ce_s = '1' and v_cnt = V_ACT_E_F2 and h_cnt = H_TOTAL - 1 then
+        nx  := ball_x + ball_vx;
+        ny  := ball_y + ball_vy;
+        nvx := ball_vx;
+        nvy := ball_vy;
+        -- Right wall
+        if nx > H_ACTIVE - BALL_W then
+          nx  := 2 * (H_ACTIVE - BALL_W) - nx;
+          nvx := -nvx;
+        end if;
+        -- Left wall
+        if nx < 0 then
+          nx  := -nx;
+          nvx := -nvx;
+        end if;
+        -- Bottom wall
+        if ny > 576 - BALL_H then
+          ny  := 2 * (576 - BALL_H) - ny;
+          nvy := -nvy;
+        end if;
+        -- Top wall
+        if ny < 0 then
+          ny  := -ny;
+          nvy := -nvy;
+        end if;
+        ball_x  <= nx;
+        ball_y  <= ny;
+        ball_vx <= nvx;
+        ball_vy <= nvy;
+      end if;
+    end if;
+  end process;
+
+  -- '1' when the current pixel lies inside the ball rectangle
+  ball_on <= '1' when screen_x >= ball_x and
+                      screen_x <  ball_x + BALL_W and
+                      screen_y >= ball_y and
+                      screen_y <  ball_y + BALL_H
+             else '0';
+
+  -- -----------------------------------------------------------------------
   -- BRAM: synchronous write, asynchronous read
   -- -----------------------------------------------------------------------
   -- Clamp bram_len to [1 .. BRAM_DEPTH]; 0 or overflow → use full depth
@@ -401,6 +511,8 @@ begin
     color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
 
   active_level <= bram_level when sel_i = 4 else
+                  white_s    when sel_i = 5 and ball_on = '1' else
+                  black_s    when sel_i = 5 else
                   grad_x_s   when sel_i = 2 else
                   grad_y_s   when sel_i = 3 else
                   white_s    when (sel_i = 0 and color_v = '1') or
