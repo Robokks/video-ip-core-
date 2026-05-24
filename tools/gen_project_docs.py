@@ -6,6 +6,7 @@ Generates 11 Word documents into docs/
 import os
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
+IMG_DIR = '/home/user/video-ip-core-/docs/img'
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
@@ -97,6 +98,21 @@ def build_table(doc, headers, rows, col_widths, zebra=True, hdr_color=None):
         for ci, w in enumerate(col_widths):
             t.rows[ri].cells[ci].width = Inches(w)
     spacer(doc); return t
+
+def add_flowchart(doc, filename, caption='', width=5.8):
+    path = f'{IMG_DIR}/{filename}'
+    if os.path.exists(path):
+        p = doc.add_paragraph()
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = p.add_run()
+        run.add_picture(path, width=Inches(width))
+        if caption:
+            cp2 = doc.add_paragraph()
+            cp2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = cp2.add_run(f'Figure: {caption}')
+            r.italic = True; r.font.size = Pt(8.5)
+            r.font.color.rgb = C_GREY
+        spacer(doc)
 
 def save(doc, filename):
     path = f'{DOCS}/{filename}'
@@ -190,6 +206,7 @@ def gen_icd():
     heading(doc, '4  BRAM Write Protocol')
     body(doc, 'The BRAM write port operates independently of the pixel clock. '
          'The host may write at any time.')
+    add_flowchart(doc, 'fc_bram_write.png', 'BRAM Write Protocol', width=4.5)
     build_table(doc,
         ['Step', 'Action', 'Notes'],
         [('1', 'Set bram_wr_addr to target pixel address (0–BRAM_DEPTH-1)', 'Row-major order'),
@@ -200,6 +217,7 @@ def gen_icd():
         [0.4, 3.8, 2.2])
 
     heading(doc, '5  Double-Buffer Handshake Protocol')
+    add_flowchart(doc, 'fc_buf_handshake.png', 'Double-Buffer Handshake Protocol', width=5.8)
     build_table(doc,
         ['Step', 'Signal', 'Action'],
         [('1', 'back_buf_o', 'Read back_buf_o — this is the bank to write to'),
@@ -297,6 +315,7 @@ def gen_sdd():
     doc = new_doc('Software Design Description', 'SDD-001', 'Rev 1.0')
 
     heading(doc, '1  Architecture Overview')
+    add_flowchart(doc, 'fc_architecture.png', 'System Architecture Flow', width=4.2)
     body(doc, 'The IP core uses a three-layer architecture:')
     body(doc, '  Layer 1 — Timing:   pal_timing generates H/V counters at 10 MHz pixel rate.')
     body(doc, '  Layer 2 — Sync:     pal_csync_il decodes H/V counters into composite sync,')
@@ -348,6 +367,7 @@ def gen_sdd():
         [2.2, 1.0, 1.2, 1.5])
 
     heading(doc, '5  Double-Buffer State Machine')
+    add_flowchart(doc, 'fc_double_buffer.png', 'Double-Buffer State Machine', width=5.5)
     body(doc, 'Signals: disp_buf (front bank index), swap_req (pending swap), buf_swapped_s (output strobe)')
     build_table(doc,
         ['Condition', 'Action', 'Next State'],
@@ -359,6 +379,7 @@ def gen_sdd():
     body(doc, 'Write port: always writes to bram_mem_{NOT disp_buf}. Read port: always reads from bram_mem_{disp_buf}.')
 
     heading(doc, '6  Active-Level Multiplexer')
+    add_flowchart(doc, 'fc_active_mux.png', 'Active Level Multiplexer Decision Tree', width=5.8)
     body(doc, 'Priority order (first matching condition wins):')
     build_table(doc,
         ['sel', 'Condition', 'Output'],
@@ -379,6 +400,7 @@ def gen_sdd():
         [0.5, 1.8, 4.0])
 
     heading(doc, '7  Ball Physics')
+    add_flowchart(doc, 'fc_ball_physics.png', 'Ball Physics Update (per frame)', width=5.0)
     body(doc, 'Updated once per frame at v_cnt=V_ACT_E_F2, h_cnt=H_TOTAL-1:')
     body(doc, '  nx = ball_x + ball_vx;  ny = ball_y + ball_vy')
     body(doc, '  If nx > H_ACTIVE-ball_w: reflect (nx = 2*(H_ACTIVE-ball_w)-nx; nvx = -nvx)')
@@ -419,6 +441,7 @@ def gen_sdp():
         [1.6, 1.6, 3.2])
 
     heading(doc, '3  Development Phases')
+    add_flowchart(doc, 'fc_dev_phases.png', 'Development Phase Flow', width=5.5)
     build_table(doc,
         ['Phase', 'Activities', 'Deliverables', 'Status'],
         [('1 — Base IP',       'pal_timing, pal_csync_il, opt1-3 variants',  'Core timing + sync modules', ('COMPLETE', C_GREEN, True)),
@@ -478,6 +501,7 @@ def gen_cm():
         [0.9, 2.8, 2.0, 1.1])
 
     heading(doc, '4  Change Control Process')
+    add_flowchart(doc, 'fc_change_control.png', 'Change Control Process', width=4.5)
     build_table(doc,
         ['Step', 'Activity'],
         [('1', 'Identify change (new feature, bug fix, or enhancement)'),
@@ -561,7 +585,9 @@ def gen_stp():
         ['TC ID', 'Testbench', 'Requirements', 'Description'],
         TCS, [0.8, 1.8, 1.5, 3.2])
 
-    heading(doc, '4  Pass / Fail Criteria')
+    heading(doc, '4  Test Execution Flow')
+    add_flowchart(doc, 'fc_test_execution.png', 'Test Execution Process', width=4.8)
+    heading(doc, '5  Pass / Fail Criteria')
     body(doc, 'PASS: ghdl exits 0 AND all "PASS" report messages appear in log.')
     body(doc, 'FAIL: Any "FAIL" report message OR ghdl exit code ≠ 0 OR severity failure.')
     body(doc, 'REGRESSION: Re-run all TCs after every RTL change. All must pass before commit.')
