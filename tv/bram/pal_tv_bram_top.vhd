@@ -29,6 +29,16 @@ use ieee.numeric_std.all;
 --   bram_len = 1040   two rows (one row-pair), repeated every row-pair
 --   bram_len = 299520 full frame  (520 * 576 = all 576 image rows)
 --
+-- Double-buffering (sel = 4):
+--   Two BRAM banks (0 and 1).  One bank is displayed; the other is the back
+--   buffer available for host writes.
+--   buf_swap     pulse '1' for one clock to request a buffer swap.  The swap
+--                is deferred to the first V-blank boundary (end of F2 active)
+--                so the display never tears.
+--   buf_swapped  strobes '1' for one clock when the swap completes.
+--   back_buf_o   combinational: current back-buffer index (0 or 1).
+--                Always write to this buffer; it is the one NOT being displayed.
+--
 -- BRAM address layout (sel = 4) — natural sequential row order:
 --   Write image rows 0, 1, 2, … 575 into BRAM sequentially;
 --   the hardware automatically routes each row to the correct interlaced field.
@@ -78,6 +88,10 @@ entity pal_tv_bram_top is
     bram_wr_data : in  std_logic                     := '0';
     -- Number of valid pixels in BRAM (address wraps here)
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
+    -- Double-buffer control (sel = 4)
+    buf_swap     : in  std_logic := '0';   -- pulse '1' to request swap at next V-blank
+    buf_swapped  : out std_logic;          -- strobes '1' for one clock when swap completes
+    back_buf_o   : out std_logic;          -- back (write) buffer index (0 or 1)
     -- Ball animation control (sel = 5)
     ball_spd_h   : in  std_logic_vector(3 downto 0) := "0011";   -- horiz speed 1–15 px/frame
     ball_spd_v   : in  std_logic_vector(3 downto 0) := "0010";   -- vert  speed 1–15 rows/frame
@@ -139,12 +153,21 @@ architecture rtl of pal_tv_bram_top is
 
 
   -- -----------------------------------------------------------------------
-  -- 1-bit BRAM  (Vivado: infer Block RAM via ram_style attribute)
+  -- 1-bit BRAM double-buffer (Vivado: infer Block RAM via ram_style attribute)
+  --   Bank 0 and Bank 1.  disp_buf selects which bank is on display;
+  --   the other bank is the back buffer available for host writes.
   -- -----------------------------------------------------------------------
   type bram_t is array (0 to BRAM_DEPTH - 1) of std_logic;
-  signal bram_mem     : bram_t := (others => '0');
-  attribute ram_style          : string;
-  attribute ram_style of bram_mem : signal is "block";
+  signal bram_mem_0   : bram_t := (others => '0');
+  signal bram_mem_1   : bram_t := (others => '0');
+  attribute ram_style               : string;
+  attribute ram_style of bram_mem_0 : signal is "block";
+  attribute ram_style of bram_mem_1 : signal is "block";
+
+  -- Double-buffer state
+  signal disp_buf      : std_logic := '0';  -- bank currently displayed
+  signal swap_req      : std_logic := '0';  -- swap pending V-blank
+  signal buf_swapped_s : std_logic := '0';
 
   signal bram_rd_line_base : integer := 0;               -- BRAM start addr of current active line
   signal bram_px_cnt  : integer range 0 to H_ACTIVE - 1 := 0;  -- pixel offset within line
@@ -472,13 +495,39 @@ begin
                        to_integer(unsigned(bram_len)) > BRAM_DEPTH
                   else to_integer(unsigned(bram_len));
 
-  -- Write port (host writes pixel data; bounds-checked)
+  -- Write port: always targets the back buffer (bank NOT currently displayed)
   process(clk)
   begin
     if rising_edge(clk) then
       if bram_wr_en = '1' and
          to_integer(unsigned(bram_wr_addr)) < BRAM_DEPTH then
-        bram_mem(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+        if disp_buf = '0' then
+          bram_mem_1(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+        else
+          bram_mem_0(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- Double-buffer swap: latch request; execute at last pixel of last F2 active line
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        disp_buf      <= '0';
+        swap_req      <= '0';
+        buf_swapped_s <= '0';
+      elsif ce_s = '1' then
+        buf_swapped_s <= '0';
+        if buf_swap = '1' then
+          swap_req <= '1';
+        end if;
+        if v_cnt = V_ACT_E_F2 and h_cnt = H_TOTAL - 1 and swap_req = '1' then
+          disp_buf      <= not disp_buf;
+          swap_req      <= '0';
+          buf_swapped_s <= '1';
+        end if;
       end if;
     end if;
   end process;
@@ -518,9 +567,14 @@ begin
   bram_rd_sum  <= bram_rd_line_base + bram_px_cnt;
   bram_rd_addr <= bram_rd_sum when bram_rd_sum < bram_len_i else 0;
 
-  -- Asynchronous read (1-bit pixel)
-  bram_pixel <= bram_mem(bram_rd_addr);
+  -- Asynchronous read from the front (display) bank
+  bram_pixel <= bram_mem_0(bram_rd_addr) when disp_buf = '0' else
+                bram_mem_1(bram_rd_addr);
   bram_level <= white_s when bram_pixel = '1' else black_s;
+
+  -- Double-buffer status outputs
+  buf_swapped <= buf_swapped_s;
+  back_buf_o  <= not disp_buf;
 
   -- -----------------------------------------------------------------------
   -- Brightness / black-level control (same as interlaced_top)

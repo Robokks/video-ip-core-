@@ -66,6 +66,10 @@ entity video_bram_top is
     bram_wr_data : in  std_logic                     := '0';
     -- Number of valid BRAM pixels (wraps address at this boundary)
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
+    -- Double-buffer control (sel = 4)
+    buf_swap     : in  std_logic := '0';   -- pulse '1' to request swap at next V-blank
+    buf_swapped  : out std_logic;          -- strobes '1' for one clock when swap completes
+    back_buf_o   : out std_logic;          -- back (write) buffer index (0 or 1)
     -- Ball animation control (sel = 5)
     ball_spd_h   : in  std_logic_vector(3 downto 0) := "0011";
     ball_spd_v   : in  std_logic_vector(3 downto 0) := "0010";
@@ -196,12 +200,21 @@ architecture rtl of video_bram_top is
   signal ball_on  : std_logic := '0';
 
   -- -----------------------------------------------------------------------
-  -- 1-bit BRAM (Vivado: infer Block RAM via ram_style attribute)
+  -- 1-bit BRAM double-buffer (Vivado: infer Block RAM via ram_style attribute)
+  --   Bank 0 and Bank 1.  disp_buf selects which bank is on display;
+  --   the other bank is the back buffer available for host writes.
   -- -----------------------------------------------------------------------
   type bram_t is array (0 to BRAM_DEPTH - 1) of std_logic;
-  signal bram_mem : bram_t := (others => '0');
-  attribute ram_style          : string;
-  attribute ram_style of bram_mem : signal is "block";
+  signal bram_mem_0   : bram_t := (others => '0');
+  signal bram_mem_1   : bram_t := (others => '0');
+  attribute ram_style               : string;
+  attribute ram_style of bram_mem_0 : signal is "block";
+  attribute ram_style of bram_mem_1 : signal is "block";
+
+  -- Double-buffer state
+  signal disp_buf      : std_logic := '0';
+  signal swap_req      : std_logic := '0';
+  signal buf_swapped_s : std_logic := '0';
 
   signal bram_rd_line_base : integer := 0;
   signal bram_px_cnt       : integer range 0 to H_ACTIVE - 1 := 0;
@@ -581,14 +594,40 @@ begin
              else '0';
 
   -- -----------------------------------------------------------------------
-  -- BRAM synchronous write
+  -- BRAM synchronous write — targets the back buffer (NOT currently displayed)
   -- -----------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if bram_wr_en = '1' and
          to_integer(unsigned(bram_wr_addr)) < BRAM_DEPTH then
-        bram_mem(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+        if disp_buf = '0' then
+          bram_mem_1(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+        else
+          bram_mem_0(to_integer(unsigned(bram_wr_addr))) <= bram_wr_data;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- Double-buffer swap: latch request; execute at last pixel of last F2 active line
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        disp_buf      <= '0';
+        swap_req      <= '0';
+        buf_swapped_s <= '0';
+      elsif ce_s = '1' then
+        buf_swapped_s <= '0';
+        if buf_swap = '1' then
+          swap_req <= '1';
+        end if;
+        if v_cnt = v_act_e_f2 and h_cnt = h_total_m1 and swap_req = '1' then
+          disp_buf      <= not disp_buf;
+          swap_req      <= '0';
+          buf_swapped_s <= '1';
+        end if;
       end if;
     end if;
   end process;
@@ -620,8 +659,14 @@ begin
                     else to_integer(unsigned(bram_len));
   bram_rd_sum  <= bram_rd_line_base + bram_px_cnt;
   bram_rd_addr <= bram_rd_sum when bram_rd_sum < bram_len_i else 0;
-  bram_pixel   <= bram_mem(bram_rd_addr);
+  -- Asynchronous read from the front (display) bank
+  bram_pixel   <= bram_mem_0(bram_rd_addr) when disp_buf = '0' else
+                  bram_mem_1(bram_rd_addr);
   bram_level   <= white_s when bram_pixel = '1' else black_s;
+
+  -- Double-buffer status outputs
+  buf_swapped <= buf_swapped_s;
+  back_buf_o  <= not disp_buf;
 
   -- -----------------------------------------------------------------------
   -- Brightness / black-level control
