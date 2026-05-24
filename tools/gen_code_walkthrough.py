@@ -1679,6 +1679,244 @@ def sec_signal_flow(doc):
 
 
 # ===========================================================================
+# Section 8 — pal_fifo_bool.vhd  (V1.1)
+# ===========================================================================
+def sec_fifo(doc):
+    doc.add_page_break()
+    heading(doc, '8  pal_fifo_bool.vhd  —  Standalone 1-bit FIFO IP  (V1.1)', 1)
+    file_banner(doc,
+                'tv/fifo/pal_fifo_bool.vhd',
+                'Standalone synchronous 1-bit (Boolean) FIFO. Depth 600,000 entries. '
+                'Not connected to the BRAM display path. Single clock domain, '
+                'synchronous reset, registered read output for Block RAM inference.')
+
+    heading(doc, '8.1  Why a Separate FIFO?', 2)
+    expl(doc,
+         'The BRAM display path uses a double-buffered frame-store — it is '
+         'a random-access memory with two banks. A FIFO provides a fundamentally '
+         'different interface: strict first-in first-out with no random addressing. '
+         'This module is kept completely independent so it can be used for any '
+         'purpose (pixel pipeline staging, flag queuing, serial data buffering) '
+         'without affecting the video display logic.')
+
+    heading(doc, '8.2  Entity Generics  (lines 31–35)', 2)
+    code_block(doc, [
+        'generic (',
+        '  DEPTH     : integer := 600000;  -- 1-bit entries',
+        '  AF_THRESH : integer := 4;       -- almost-full  threshold',
+        '  AE_THRESH : integer := 4        -- almost-empty threshold',
+        ');',
+    ])
+    expl(doc,
+         'DEPTH=600,000 is the number of 1-bit storage locations. '
+         'At 1-bit width, each Artix-7 BRAM36 tile stores 32,768 bits; '
+         'ceiling(600,000 / 32,768) = 19 BRAM36 tiles are required. '
+         'The cRIO-9056 has 105 BRAM36 tiles so FIFO usage is 18%.')
+    expl(doc,
+         'AF_THRESH and AE_THRESH set the programmable thresholds for the '
+         'almost_full and almost_empty flags. Default 4 means almost_full fires '
+         'when 4 or fewer spaces remain, giving the host time to react before overflow.')
+
+    heading(doc, '8.3  Entity Ports', 2)
+    code_block(doc, [
+        '-- Write side',
+        'wr_en   : in  std_logic;    -- pulse 1 clock to write',
+        'wr_data : in  std_logic;    -- 1-bit Boolean value',
+        'full    : out std_logic;    -- asserted when no room left',
+        'wr_ack  : out std_logic;    -- 1-clock strobe: write accepted',
+        '',
+        '-- Read side',
+        'rd_en    : in  std_logic;   -- pulse 1 clock to advance pointer',
+        'rd_data  : out std_logic;   -- registered output (1-cycle latency)',
+        'empty    : out std_logic;   -- asserted when nothing to read',
+        'rd_valid : out std_logic;   -- 1-clock strobe: rd_data updated',
+        '',
+        '-- Status',
+        'level        : out std_logic_vector(19 downto 0);  -- fill count',
+        'almost_full  : out std_logic;',
+        'almost_empty : out std_logic',
+    ])
+    expl(doc,
+         'wr_en and rd_en are one-clock pulses. Holding wr_en=1 continuously writes '
+         'one entry per clock until full. Holding rd_en=1 reads one entry per clock '
+         'until empty. Both are silently ignored when full/empty respectively — '
+         'no overflow or underflow can corrupt the FIFO state.')
+
+    heading(doc, '8.4  Internal BRAM Array  (lines 68–73)', 2)
+    code_block(doc, [
+        'type fifo_mem_t is array (0 to DEPTH - 1) of std_logic;',
+        'signal fifo_mem : fifo_mem_t := (others => \'0\');',
+        'attribute ram_style             : string;',
+        'attribute ram_style of fifo_mem : signal is "block";',
+    ])
+    expl(doc,
+         'fifo_mem is a 1-dimensional array of std_logic with DEPTH entries. '
+         'The ram_style="block" attribute tells Vivado to map this to Block RAM tiles. '
+         'Without this attribute, Vivado might choose distributed LUT-RAM for small '
+         'depths; for 600,000 bits it would need ~9,375 LUTs which is impractical. '
+         'Block RAM inference uses 19 BRAM36 tiles instead.')
+
+    heading(doc, '8.5  Internal Pointers and Counter  (lines 75–80)', 2)
+    code_block(doc, [
+        'signal wr_ptr : integer range 0 to DEPTH - 1 := 0;',
+        'signal rd_ptr : integer range 0 to DEPTH - 1 := 0;',
+        'signal count  : integer range 0 to DEPTH     := 0;',
+    ])
+    expl(doc,
+         'wr_ptr is the address where the next write will go. '
+         'rd_ptr is the address where the next read will come from. '
+         'Both wrap around at DEPTH-1 → 0 (circular buffer). '
+         'count tracks the exact fill level from 0 (empty) to DEPTH (full). '
+         'Using a separate count register (rather than comparing wr_ptr==rd_ptr) '
+         'avoids the classic ambiguity between empty and full in a power-of-2 FIFO.')
+
+    heading(doc, '8.6  Write Process  (lines 89–104)', 2)
+    code_block(doc, [
+        'process(clk)',
+        'begin',
+        '  if rising_edge(clk) then',
+        '    wr_ack_s <= \'0\';                         -- clear strobe',
+        '    if rst = \'1\' then',
+        '      wr_ptr <= 0;',
+        '    elsif wr_en = \'1\' and full_s = \'0\' then',
+        '      fifo_mem(wr_ptr) <= wr_data;            -- store 1 bit',
+        '      if wr_ptr = DEPTH - 1 then              -- wrap pointer',
+        '        wr_ptr <= 0;',
+        '      else',
+        '        wr_ptr <= wr_ptr + 1;',
+        '      end if;',
+        '      wr_ack_s <= \'1\';                       -- pulse acknowledge',
+        '    end if;',
+        '  end if;',
+        'end process;',
+    ])
+    expl(doc,
+         'The write is only performed when wr_en=1 AND full_s=0. '
+         'This ensures a full FIFO never loses data or corrupts the pointer. '
+         'wr_ack_s is cleared at the start of every clock and set only when '
+         'a write actually occurs — making it a precise one-cycle acknowledge strobe. '
+         'The pointer wraps using an explicit if/else comparator (not modulo %) '
+         'because modulo of a non-power-of-2 requires hardware division in synthesis.')
+
+    heading(doc, '8.7  Read Process  (lines 107–124)', 2)
+    code_block(doc, [
+        'process(clk)',
+        'begin',
+        '  if rising_edge(clk) then',
+        '    rd_valid_s <= \'0\';',
+        '    if rst = \'1\' then',
+        '      rd_ptr  <= 0;',
+        '      rd_data <= \'0\';',
+        '    elsif rd_en = \'1\' and empty_s = \'0\' then',
+        '      rd_data    <= fifo_mem(rd_ptr);   -- registered BRAM read',
+        '      if rd_ptr = DEPTH - 1 then',
+        '        rd_ptr <= 0;',
+        '      else',
+        '        rd_ptr <= rd_ptr + 1;',
+        '      end if;',
+        '      rd_valid_s <= \'1\';',
+        '    end if;',
+        '  end if;',
+        'end process;',
+    ])
+    expl(doc,
+         'The read output rd_data is REGISTERED (updated on the clock edge). '
+         'This is called "standard mode" FIFO (as opposed to First-Word Fall-Through). '
+         'rd_data is valid one clock AFTER rd_en is asserted. '
+         'This is required for Vivado to infer Block RAM correctly — Block RAM '
+         'has inherent one-cycle read latency and the registered output maps '
+         'directly to the BRAM output register (OREG), saving logic.')
+
+    heading(doc, '8.8  Fill Counter Process  (lines 127–145)', 2)
+    code_block(doc, [
+        'process(clk)',
+        '  variable do_wr : boolean;',
+        '  variable do_rd : boolean;',
+        'begin',
+        '  if rising_edge(clk) then',
+        '    if rst = \'1\' then',
+        '      count <= 0;',
+        '    else',
+        '      do_wr := (wr_en = \'1\') and (full_s  = \'0\');',
+        '      do_rd := (rd_en = \'1\') and (empty_s = \'0\');',
+        '      if do_wr and not do_rd then',
+        '        count <= count + 1;       -- write only',
+        '      elsif do_rd and not do_wr then',
+        '        count <= count - 1;       -- read only',
+        '      -- simultaneous valid r+w: count unchanged',
+        '      end if;',
+        '    end if;',
+        '  end if;',
+        'end process;',
+    ])
+    expl(doc,
+         'The fill counter is updated separately from the pointer processes. '
+         'VHDL variables do_wr and do_rd capture the effective write/read decision '
+         'in the same delta step, ensuring the count update is consistent with '
+         'what the write and read processes actually did.')
+    expl(doc,
+         'Simultaneous read + write (do_wr AND do_rd): both happen — one entry '
+         'is removed from the head, one entry is added to the tail — so the count '
+         'is unchanged. This is the correct and most important edge case for a FIFO '
+         'used as a pipeline stage. It is verified by Phase 5 of the testbench.')
+
+    heading(doc, '8.9  Output Assignments  (lines 148–153)', 2)
+    code_block(doc, [
+        'full         <= full_s;',
+        'empty        <= empty_s;',
+        'wr_ack       <= wr_ack_s;',
+        'rd_valid     <= rd_valid_s;',
+        'level        <= std_logic_vector(to_unsigned(count, 20));',
+        'almost_full  <= \'1\' when count >= DEPTH - AF_THRESH else \'0\';',
+        'almost_empty <= \'1\' when count <= AE_THRESH         else \'0\';',
+    ])
+    expl(doc,
+         'level is the count signal converted to a 20-bit unsigned vector. '
+         '20 bits is sufficient for DEPTH up to 2^20 = 1,048,576 (covers 600,000). '
+         'almost_full and almost_empty are purely combinational comparators on count. '
+         'They give the host early warning: almost_full fires 4 entries before the '
+         'FIFO becomes full, leaving time to halt writes without overflow.')
+
+    heading(doc, '8.10  Testbench — tb_pal_fifo_bool.vhd', 2)
+    expl(doc, 'Seven self-checking phases — all PASS (simulation completes at 3215 ns):')
+    tbl = doc.add_table(rows=8, cols=3)
+    tbl.style = 'Table Grid'
+    hdrs = tbl.rows[0].cells
+    for ci, h_ in enumerate(['Phase', 'What is tested', 'Pass condition']):
+        set_cell_bg(hdrs[ci], C_NAVY)
+        cp(hdrs[ci], h_, bold=True, color=C_WHITE)
+    phases = [
+        ('Ph 1', 'Write 5 items; check level=5, empty=0', 'level correct, flags set'),
+        ('Ph 2', 'Read 5 items; verify FIFO order 1,0,1,1,0', 'All 5 match written pattern'),
+        ('Ph 3', 'Fill to DEPTH=32; overflow write rejected', 'full=1; level unchanged after extra write'),
+        ('Ph 4', 'Drain all; underflow read rejected', 'empty=1; level=0 unchanged'),
+        ('Ph 5', 'Simultaneous rd+wr 4 times; count=8 throughout', 'level held constant'),
+        ('Ph 6', 'Reset during operation; flags clear', 'empty=1, full=0, level=0'),
+        ('Ph 7', 'Pointer wrap-around past DEPTH-1', 'Correct data order after wrap'),
+    ]
+    for i, (ph, what, cond) in enumerate(phases):
+        r = tbl.rows[i + 1]
+        set_cell_bg(r.cells[0], C_LTBLUE)
+        cp(r.cells[0], ph, bold=True)
+        cp(r.cells[1], what)
+        cp(r.cells[2], cond)
+
+    heading(doc, '8.11  BRAM Resource Summary', 2)
+    tbl2 = doc.add_table(rows=6, cols=2)
+    tbl2.style = 'Table Grid'
+    rows2 = [('FIFO depth', '600,000 entries'),
+             ('Data width', '1 bit (std_logic)'),
+             ('BRAM36 tiles', '19  (19% of cRIO-9056\'s 105)'),
+             ('Write latency', '1 clock (synchronous write)'),
+             ('Read latency', '1 clock (registered output)'),
+             ('Max throughput', '1 bit per clock (both read and write)')]
+    for i, (k, v) in enumerate(rows2):
+        set_cell_bg(tbl2.rows[i].cells[0], C_LTBLUE)
+        cp(tbl2.rows[i].cells[0], k, bold=True)
+        cp(tbl2.rows[i].cells[1], v)
+
+
+# ===========================================================================
 # Main
 # ===========================================================================
 def main():
@@ -1700,6 +1938,7 @@ def main():
     sec_video_bram(doc)
     sec_testbench(doc)
     sec_signal_flow(doc)
+    sec_fifo(doc)
 
     doc.save(OUT_FILE)
     print(f'Saved: {OUT_FILE}')

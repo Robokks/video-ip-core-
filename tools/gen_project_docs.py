@@ -230,6 +230,50 @@ def gen_icd():
     body(doc, 'WARNING: Holding buf_swap HIGH causes a new swap request every clock. '
          'Always return buf_swap to 0 within one clock cycle.', color=C_RED, bold=True)
 
+    heading(doc, '6  FIFO Interface  (pal_fifo_bool)')
+    body(doc, 'Standalone 1-bit (Boolean) synchronous FIFO IP. '
+         'Depth 600,000 entries. Not connected to the BRAM display path. '
+         'Single clock domain, synchronous reset.')
+    heading(doc, '6.1  Input Ports', 2)
+    build_table(doc,
+        ['Port', 'Width', 'Dir', 'Default', 'Description'],
+        [('clk',      '1',  'in', '—',     'System clock (any rate; shared with other logic)'),
+         ('rst',      '1',  'in', '—',     'Synchronous active-HIGH reset'),
+         ('wr_en',    '1',  'in', "'0'",   'Write enable — pulse HIGH 1 clock to write'),
+         ('wr_data',  '1',  'in', "'0'",   '1-bit Boolean value to write'),
+         ('rd_en',    '1',  'in', "'0'",   'Read enable — pulse HIGH 1 clock to advance pointer')],
+        [1.1, 0.6, 0.5, 0.9, 4.1])
+    heading(doc, '6.2  Output Ports', 2)
+    build_table(doc,
+        ['Port', 'Width', 'Dir', 'Description'],
+        [('full',         '1',  'out', 'HIGH when FIFO is full; wr_en ignored'),
+         ('wr_ack',       '1',  'out', 'Strobes HIGH 1 clock when write accepted'),
+         ('rd_data',      '1',  'out', 'Registered read output — valid 1 clock after rd_en'),
+         ('empty',        '1',  'out', 'HIGH when FIFO is empty; rd_en ignored'),
+         ('rd_valid',     '1',  'out', 'Strobes HIGH 1 clock when rd_data updated'),
+         ('level',        '20', 'out', 'Fill count 0..DEPTH (unsigned)'),
+         ('almost_full',  '1',  'out', 'HIGH when level >= DEPTH - AF_THRESH (default 4)'),
+         ('almost_empty', '1',  'out', 'HIGH when level <= AE_THRESH (default 4)')],
+        [1.3, 0.6, 0.5, 4.8])
+    heading(doc, '6.3  Generics', 2)
+    build_table(doc,
+        ['Generic', 'Default', 'Description'],
+        [('DEPTH',     '600000', 'Number of 1-bit entries; needs 19 BRAM36 tiles'),
+         ('AF_THRESH', '4',      'Almost-full distance from top'),
+         ('AE_THRESH', '4',      'Almost-empty distance from zero')],
+        [1.4, 1.0, 4.8])
+    heading(doc, '6.4  BRAM Resource Usage', 2)
+    build_table(doc,
+        ['Parameter', 'Value'],
+        [('Entry width',         '1 bit (std_logic)'),
+         ('Depth',               '600,000 entries'),
+         ('Total storage',       '600,000 bits'),
+         ('BRAM36 tiles needed', '19  (600,000 ÷ 32,768 = 18.3 → 19)'),
+         ('Available (cRIO-9056)','105 BRAM36 tiles'),
+         ('FIFO usage',          '18%  — well within budget'),
+         ('Read latency',        '1 clock cycle (registered output)')],
+        [2.5, 4.7])
+
     save(doc, 'ICD_Interface_Control_Document.docx')
 
 # =============================================================================
@@ -269,6 +313,7 @@ def gen_srs():
         ('FR-016','Brightness Control','A 4-bit brightness port shall override the white DAC level for all patterns. Value shall be clamped to [4, 15].'),
         ('FR-017','Black Level Control','A 4-bit black_lvl port shall set the active black/blanking floor for all patterns. Value clamped to [4, brightness].'),
         ('FR-018','Sync Outputs','The IP shall provide composite sync (csync_o), H-sync-only (line_sync_o), V-sync (frame_sync_o), field indicator (field_o), active (active_o), and blanking (blank_o) outputs.'),
+        ('FR-019','Standalone FIFO IP','A standalone 1-bit (Boolean) synchronous FIFO IP (pal_fifo_bool) shall be provided with depth 600,000 entries, full/empty/almost_full/almost_empty flags, wr_ack, rd_valid strobes, and a 20-bit fill-level output. It shall be independent of the BRAM display path.'),
     ]
     build_table(doc,
         ['ID', 'Name', 'Requirement'],
@@ -745,6 +790,7 @@ def gen_tm():
         ('FR-016','Brightness control',            'white_level_i, white_s',                 'TC-001,TC-006',  'PASS'),
         ('FR-017','Black level control',           'black_level_i, black_s',                 'TC-006',         'PASS'),
         ('FR-018','Sync outputs',                  'csync_o, line_sync_o, frame_sync_o, field_o, active_o, blank_o', 'TC-002', 'PASS'),
+        ('FR-019','Standalone FIFO IP',            'tv/fifo/pal_fifo_bool.vhd — circular buf, wr/rd ptrs, count',    'TC-010', 'PASS'),
     ]
     build_table(doc,
         ['Req ID', 'Name', 'Design Module/Signal', 'Test Case', 'Result'],
@@ -888,7 +934,8 @@ def gen_cl():
          ('V0.5', '2026-05-23', 'HTML pattern generator tool v1 and v2 (text overlay, multi-zone)'),
          ('V0.6', '2026-05-24', 'User & Reference Guide Word document (v1 then v2 with simulation data)'),
          ('V0.7', '2026-05-24', 'Configuration Summary document'),
-         ('V1.0', '2026-05-24', 'BRAM double-buffering, full formal docs set (ICD, SRS, SDD, SDP, CM, STP, STR, VC, TM, BR, CL)')],
+         ('V1.0', '2026-05-24', 'BRAM double-buffering, full formal docs set (ICD, SRS, SDD, SDP, CM, STP, STR, VC, TM, BR, CL)'),
+        ('V1.1', '2026-05-24', 'Standalone 1-bit FIFO IP (pal_fifo_bool, DEPTH=600000). 7-phase testbench. All docs updated.')],
         [0.8, 1.0, 5.5])
 
     heading(doc, '2  Detailed Change Log')
@@ -929,6 +976,13 @@ def gen_cl():
          'White rectangle bouncing inside active picture area. Elastic reflection on all 4 walls. '
          'Default size 60×50 px, speed 3h/2v px/frame.',
          'tv/bram/pal_tv_bram_top.vhd'),
+        ('2026-05-24', 'V1.1', 'feat', 'Standalone 1-bit FIFO IP (pal_fifo_bool)',
+         'New entity pal_fifo_bool: 1-bit Boolean FIFO, DEPTH=600,000 entries (19 BRAM36 tiles). '
+         'Circular buffer with wr_ptr/rd_ptr/count. Flags: full, empty, almost_full, almost_empty. '
+         'Strobes: wr_ack, rd_valid. 20-bit level output. Synchronous reset. '
+         'Self-checking testbench tb_pal_fifo_bool: 7 phases (write, read, full, empty, '
+         'simultaneous r/w, reset, wrap-around). ALL PASS. Not connected to BRAM display path.',
+         'tv/fifo/pal_fifo_bool.vhd, tv/fifo/tb_pal_fifo_bool.vhd'),
         ('2026-05-22', 'V0.1', 'feat', 'Base IP Core',
          'pal_timing (H/V counters, CLK_DIV). pal_csync_il (interlaced composite sync, purely combinational). '
          'pal_sync_gen (non-interlaced sync). opt1 CRT50, opt2 interlaced, opt3 prog25. '
@@ -938,7 +992,7 @@ def gen_cl():
     for date, ver, typ, name, detail, files in CHANGES:
         t = doc.add_table(rows=1, cols=4)
         t.style = 'Table Grid'
-        hc = C_HDR if ver == 'V1.0' else C_HDR2
+        hc = C_HDR if ver in ('V1.0', 'V1.1') else C_HDR2
         set_cell_bg(t.rows[0].cells[0], hc); cp(t.rows[0].cells[0], f'{ver}', bold=True, color=C_WHITE, size=10)
         set_cell_bg(t.rows[0].cells[1], hc); cp(t.rows[0].cells[1], date, bold=False, color=C_WHITE, size=9.5)
         set_cell_bg(t.rows[0].cells[2], hc); cp(t.rows[0].cells[2], f'[{typ}] {name}', bold=True, color=C_WHITE, size=10)
