@@ -4,513 +4,876 @@
 <meta charset="UTF-8">
 <title>BRAM Pattern Generator - PAL/NTSC Video IP</title>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body {
-    font-family: 'Segoe UI', system-ui, sans-serif;
-    background: #1a1a2e;
-    color: #e0e0e0;
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-  }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
 
-  /* ---- Left panel ---- */
-  #panel {
-    width: 320px;
-    min-width: 280px;
-    background: #16213e;
-    border-right: 2px solid #0f3460;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
+/* ---- Left panel ---- */
+#panel {
+  width: 340px;
+  min-width: 300px;
+  background: #16213e;
+  border-right: 2px solid #0f3460;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+#panel::-webkit-scrollbar { width: 6px; }
+#panel::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
 
-  #panel-header {
-    background: #0f3460;
-    padding: 14px 16px;
-    font-weight: 700;
-    font-size: 15px;
-    letter-spacing: .5px;
-    color: #e94560;
-  }
+#panel-header {
+  background: #0f3460;
+  padding: 13px 16px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: .4px;
+  color: #e94560;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
 
-  .section {
-    padding: 12px 14px;
-    border-bottom: 1px solid #0f3460;
-  }
+.section {
+  padding: 10px 13px;
+  border-bottom: 1px solid #0f3460;
+}
+.section-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #e94560;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
-  .section-title {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: #e94560;
-    margin-bottom: 8px;
-  }
+/* generic row */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+.row .lbl {
+  flex: 0 0 68px;
+  color: #aaa;
+  font-size: 11.5px;
+}
+.row.tall { align-items: flex-start; }
 
-  label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 12.5px;
-    margin-bottom: 6px;
-    gap: 8px;
-  }
+input[type=number], select, input[type=text] {
+  flex: 1;
+  background: #0a1628;
+  border: 1px solid #1a3a6a;
+  color: #e0e0e0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  min-width: 0;
+}
+input[type=number] { width: 60px; flex: none; }
+input[type=text]   { flex: 1; }
+select             { flex: 1; }
 
-  label span { flex: 0 0 auto; }
+input[type=range]  { flex: 1; accent-color: #e94560; }
+input[type=color]  { width: 30px; height: 24px; border: 1px solid #1a3a6a;
+                     border-radius: 4px; cursor: pointer; background: none;
+                     padding: 1px; flex: none; }
+input[type=checkbox] { accent-color: #e94560; width: 13px; height: 13px; flex: none; }
 
-  input[type=number], select {
-    flex: 1;
-    background: #0a1628;
-    border: 1px solid #0f3460;
-    color: #e0e0e0;
-    padding: 4px 7px;
-    border-radius: 4px;
-    font-size: 12.5px;
-    min-width: 0;
-  }
+/* small text fields for x/y/size */
+.inp-sm { width: 52px !important; }
+.inp-md { width: 68px !important; }
 
-  input[type=range] {
-    flex: 1;
-    accent-color: #e94560;
-  }
+.range-val { font-size: 11px; color: #e94560; min-width: 26px; text-align: right; }
 
-  input[type=color] {
-    flex: 0 0 40px;
-    height: 24px;
-    border: 1px solid #0f3460;
-    border-radius: 4px;
-    cursor: pointer;
-    background: none;
-    padding: 1px;
-  }
+/* buttons */
+.btn {
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  transition: filter .15s;
+  white-space: nowrap;
+}
+.btn:hover { filter: brightness(1.18); }
+.btn-primary  { background: #e94560; color: #fff; }
+.btn-secondary{ background: #0f3460; color: #e0e0e0; }
+.btn-export   { background: #533483; color: #fff; display: block; width: 100%; margin-top: 5px; padding: 8px; }
+.btn-bin      { background: #1d6b44; color: #fff; display: block; width: 100%; margin-top: 5px; padding: 8px; }
+.btn-sm       { padding: 3px 7px; font-size: 11px; }
+.btn-danger   { background: #5a1a1a; color: #ffaaaa; }
+.btn-add      { background: #1a4a2a; color: #afffaf; font-size: 11px; }
 
-  input[type=checkbox] { accent-color: #e94560; width: 14px; height: 14px; }
+/* ---- Text overlay entries ---- */
+.txt-entry {
+  background: #0a1628;
+  border: 1px solid #1a3a6a;
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 6px;
+}
+.txt-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.txt-entry-head input[type=text] {
+  flex: 1;
+  font-size: 12.5px;
+  background: #162038;
+}
+.txt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+.txt-grid .row { margin-bottom: 0; }
+.txt-grid .lbl { flex: 0 0 36px; font-size: 11px; }
+.txt-entry-no-bg-row {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 4px; font-size: 11px; color: #aaa;
+}
 
-  .btn {
-    display: block;
-    width: 100%;
-    padding: 9px;
-    margin-top: 6px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-    transition: filter .15s;
-  }
-  .btn:hover { filter: brightness(1.15); }
-  .btn-primary { background: #e94560; color: #fff; }
-  .btn-secondary { background: #0f3460; color: #e0e0e0; }
-  .btn-export  { background: #533483; color: #fff; }
-  .btn-bin     { background: #1d6b44; color: #fff; }
+/* ---- Multi-zone rows ---- */
+.mz-entry {
+  background: #0a1628;
+  border: 1px solid #1a3a6a;
+  border-radius: 5px;
+  padding: 7px;
+  margin-bottom: 5px;
+  font-size: 11.5px;
+}
+.mz-row1 { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+.mz-row2 { display: flex; align-items: center; gap: 5px; }
+.mz-label { font-size: 10.5px; color: #e94560; font-weight: 700;
+            flex: 0 0 44px; }
 
-  /* stripe zone rows */
-  #zone-list { display: flex; flex-direction: column; gap: 4px; }
-  .zone-row {
-    display: flex; align-items: center; gap: 6px;
-    background: #0a1628; border-radius: 4px; padding: 4px 7px;
-    font-size: 12px;
-  }
-  .zone-row input[type=number] { width: 52px; flex: none; }
-  .zone-row span { flex: 1; font-size: 11px; color: #aaa; }
+.hidden { display: none !important; }
 
-  /* ---- Right: canvas area ---- */
-  #canvas-area {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #0a0a1a;
-    overflow: hidden;
-    gap: 10px;
-  }
-
-  #canvas-wrap {
-    position: relative;
-    border: 2px solid #0f3460;
-    background: #000;
-    display: inline-block;
-    max-width: 95vw;
-    max-height: 85vh;
-    overflow: hidden;
-  }
-
-  canvas {
-    display: block;
-    image-rendering: pixelated;
-  }
-
-  #overlay-canvas {
-    position: absolute;
-    top: 0; left: 0;
-    pointer-events: none;
-  }
-
-  #info-bar {
-    font-size: 11px;
-    color: #888;
-    text-align: center;
-  }
-
-  /* hidden sections */
-  .hidden { display: none !important; }
-
-  /* value display beside range */
-  .range-val { font-size: 11px; color: #e94560; min-width: 28px; text-align: right; }
+/* ---- Canvas area ---- */
+#canvas-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a1a;
+  overflow: hidden;
+  gap: 8px;
+}
+#canvas-wrap {
+  position: relative;
+  border: 2px solid #0f3460;
+  background: #000;
+  display: inline-block;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow: hidden;
+}
+canvas { display: block; image-rendering: pixelated; }
+#overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+#info-bar { font-size: 11px; color: #888; text-align: center; }
 </style>
 </head>
 <body>
 
-<!-- ===== Left panel ===== -->
+<!-- ============================= PANEL ============================= -->
 <div id="panel">
-  <div id="panel-header">&#9654; BRAM Pattern Generator</div>
+  <div id="panel-header">&#9654; BRAM Pattern Generator v2</div>
 
-  <!-- Canvas size -->
+  <!-- Canvas Size -->
   <div class="section">
     <div class="section-title">Canvas Size</div>
-    <label><span>Width px</span>
-      <input type="number" id="cvs-w" value="520" min="1" max="1920"></label>
-    <label><span>Height px</span>
-      <input type="number" id="cvs-h" value="576" min="1" max="1080"></label>
-    <label><span>Format</span>
+    <div class="row">
+      <span class="lbl">Preset</span>
       <select id="fmt-preset">
         <option value="">Custom</option>
-        <option value="520,576" selected>PAL 625/50 (520x576)</option>
-        <option value="520,480">NTSC 525/60 (520x480)</option>
-        <option value="640,480">VGA 640x480</option>
-        <option value="320,240">QVGA 320x240</option>
+        <option value="520,576" selected>PAL 625/50  (520×576)</option>
+        <option value="520,480">NTSC 525/60 (520×480)</option>
+        <option value="640,480">VGA 640×480</option>
+        <option value="320,240">QVGA 320×240</option>
       </select>
-    </label>
-    <label><span>PAL overlay</span>
+    </div>
+    <div class="row">
+      <span class="lbl">Width px</span>
+      <input type="number" id="cvs-w" value="520" min="1" max="1920" class="inp-md">
+      <span class="lbl" style="flex:0 0 44px;text-align:right">H px</span>
+      <input type="number" id="cvs-h" value="576" min="1" max="1080" class="inp-md">
+    </div>
+    <div class="row">
+      <span class="lbl">PAL guide</span>
       <input type="checkbox" id="pal-overlay" checked>
-    </label>
+      <span style="font-size:11px;color:#888">centre + corners</span>
+    </div>
+  </div>
+
+  <!-- Colour -->
+  <div class="section">
+    <div class="section-title">Colours</div>
+    <div class="row">
+      <span class="lbl">Foreground</span>
+      <input type="color" id="col-fg" value="#ffffff">
+      <span class="lbl" style="flex:0 0 68px;text-align:right">Background</span>
+      <input type="color" id="col-bg" value="#000000">
+    </div>
   </div>
 
   <!-- Pattern type -->
   <div class="section">
     <div class="section-title">Pattern</div>
-    <label><span>Type</span>
+    <div class="row">
+      <span class="lbl">Type</span>
       <select id="pat-type">
-        <option value="solid_white">Solid White</option>
-        <option value="solid_black">Solid Black</option>
-        <option value="v_stripes" selected>Vertical Stripes</option>
-        <option value="h_stripes">Horizontal Stripes</option>
-        <option value="checkerboard">Checkerboard</option>
-        <option value="v_gradient">V-Gradient (H steps)</option>
-        <option value="h_gradient">H-Gradient (V steps)</option>
-        <option value="crosshatch">Crosshatch Grid</option>
-        <option value="centre_cross">Centre Cross</option>
-        <option value="circle">Circle / Ellipse</option>
-        <option value="zones">Custom Zones (V)</option>
+        <optgroup label="Simple">
+          <option value="solid_white">Solid White</option>
+          <option value="solid_black">Solid Black</option>
+        </optgroup>
+        <optgroup label="Stripes">
+          <option value="v_stripes" selected>Vertical Stripes</option>
+          <option value="h_stripes">Horizontal Stripes</option>
+          <option value="checkerboard">Checkerboard</option>
+        </optgroup>
+        <optgroup label="Gradients">
+          <option value="v_gradient">V-Gradient (H steps)</option>
+          <option value="h_gradient">H-Gradient (V steps)</option>
+        </optgroup>
+        <optgroup label="Geometry">
+          <option value="crosshatch">Crosshatch Grid</option>
+          <option value="centre_cross">Centre Cross</option>
+          <option value="circle">Circle / Ellipse</option>
+        </optgroup>
+        <optgroup label="Zone-based">
+          <option value="color_zones">Colour Zones (V)</option>
+          <option value="multi_zone">Multi-Zone Pattern</option>
+        </optgroup>
       </select>
-    </label>
-    <label><span>Foreground</span>
-      <input type="color" id="col-fg" value="#ffffff"></label>
-    <label><span>Background</span>
-      <input type="color" id="col-bg" value="#000000"></label>
+    </div>
   </div>
 
-  <!-- Pattern-specific controls -->
+  <!-- STRIPE options -->
   <div class="section" id="sec-stripes">
     <div class="section-title">Stripe Options</div>
-    <label><span>Stripe width</span>
-      <input type="number" id="stripe-w" value="4" min="1" max="1024">
-    </label>
+    <div class="row">
+      <span class="lbl">Stripe W</span>
+      <input type="number" id="stripe-w" value="4" min="1" max="1024" class="inp-md">
+      <span style="font-size:11px;color:#888">px</span>
+    </div>
   </div>
 
+  <!-- CHECKER options -->
   <div class="section hidden" id="sec-checker">
     <div class="section-title">Checkerboard</div>
-    <label><span>Cell width</span>
-      <input type="number" id="check-w" value="52" min="1" max="512"></label>
-    <label><span>Cell height</span>
-      <input type="number" id="check-h" value="58" min="1" max="512"></label>
+    <div class="row">
+      <span class="lbl">Cell W</span>
+      <input type="number" id="check-w" value="52" min="1" max="512" class="inp-md">
+      <span class="lbl" style="flex:0 0 46px;text-align:right">Cell H</span>
+      <input type="number" id="check-h" value="58" min="1" max="512" class="inp-md">
+    </div>
   </div>
 
+  <!-- GRADIENT options -->
   <div class="section hidden" id="sec-gradient">
     <div class="section-title">Gradient</div>
-    <label><span>Steps</span>
-      <input type="number" id="grad-steps" value="10" min="2" max="256"></label>
+    <div class="row">
+      <span class="lbl">Steps</span>
+      <input type="number" id="grad-steps" value="10" min="2" max="256" class="inp-md">
+    </div>
   </div>
 
+  <!-- CROSSHATCH options -->
   <div class="section hidden" id="sec-crosshatch">
     <div class="section-title">Crosshatch</div>
-    <label><span>H spacing px</span>
-      <input type="number" id="cross-h" value="52" min="1" max="1024"></label>
-    <label><span>V spacing px</span>
-      <input type="number" id="cross-v" value="58" min="1" max="1024"></label>
-    <label><span>Line width px</span>
-      <input type="number" id="cross-lw" value="1" min="1" max="16"></label>
+    <div class="row">
+      <span class="lbl">H spacing</span>
+      <input type="number" id="cross-h" value="52" min="1" max="1024" class="inp-md">
+      <span class="lbl" style="flex:0 0 54px;text-align:right">V spacing</span>
+      <input type="number" id="cross-v" value="58" min="1" max="1024" class="inp-md">
+    </div>
+    <div class="row">
+      <span class="lbl">Line W</span>
+      <input type="number" id="cross-lw" value="1" min="1" max="16" class="inp-md">
+    </div>
   </div>
 
+  <!-- CIRCLE options -->
   <div class="section hidden" id="sec-circle">
     <div class="section-title">Circle / Ellipse</div>
-    <label><span>Centre X</span>
-      <input type="number" id="circ-cx" value="260" min="0" max="1920"></label>
-    <label><span>Centre Y</span>
-      <input type="number" id="circ-cy" value="288" min="0" max="1080"></label>
-    <label><span>Radius X</span>
-      <input type="number" id="circ-rx" value="150" min="1" max="1920"></label>
-    <label><span>Radius Y</span>
-      <input type="number" id="circ-ry" value="150" min="1" max="1080"></label>
-    <label><span>Fill</span>
-      <input type="checkbox" id="circ-fill" checked></label>
+    <div class="row">
+      <span class="lbl">Centre X</span>
+      <input type="number" id="circ-cx" value="260" min="0" max="1920" class="inp-md">
+      <span class="lbl" style="flex:0 0 46px;text-align:right">Y</span>
+      <input type="number" id="circ-cy" value="288" min="0" max="1080" class="inp-md">
+    </div>
+    <div class="row">
+      <span class="lbl">Radius X</span>
+      <input type="number" id="circ-rx" value="150" min="1" max="1920" class="inp-md">
+      <span class="lbl" style="flex:0 0 46px;text-align:right">Y</span>
+      <input type="number" id="circ-ry" value="150" min="1" max="1080" class="inp-md">
+    </div>
+    <div class="row">
+      <span class="lbl">Filled</span>
+      <input type="checkbox" id="circ-fill" checked>
+    </div>
   </div>
 
-  <div class="section hidden" id="sec-zones">
-    <div class="section-title">Custom Zones (Vertical)</div>
-    <label><span>Zone count</span>
-      <input type="number" id="zone-count" value="8" min="1" max="32"></label>
-    <button class="btn btn-secondary" id="btn-gen-zones" style="margin-bottom:8px">Regenerate Zone List</button>
-    <div id="zone-list"></div>
-    <p style="font-size:11px;color:#888;margin-top:6px">Width auto-fills to share remaining pixels evenly.</p>
+  <!-- COLOUR ZONES options -->
+  <div class="section hidden" id="sec-color-zones">
+    <div class="section-title">
+      Colour Zones (V)
+      <button class="btn btn-sm btn-secondary" id="btn-regen-czones">Rebuild</button>
+    </div>
+    <div class="row">
+      <span class="lbl">Zones</span>
+      <input type="number" id="cz-count" value="8" min="1" max="32" class="inp-sm">
+    </div>
+    <div id="cz-list"></div>
   </div>
 
-  <!-- Brightness slider -->
+  <!-- MULTI-ZONE options -->
+  <div class="section hidden" id="sec-multi-zone">
+    <div class="section-title">
+      Multi-Zone Pattern
+      <button class="btn btn-sm btn-secondary" id="btn-regen-mz">Rebuild</button>
+    </div>
+    <div class="row">
+      <span class="lbl">Direction</span>
+      <select id="mz-dir">
+        <option value="v">Vertical (columns, L→R)</option>
+        <option value="h">Horizontal (rows, T→B)</option>
+      </select>
+    </div>
+    <div class="row">
+      <span class="lbl">Zones</span>
+      <input type="number" id="mz-count" value="4" min="1" max="32" class="inp-sm">
+    </div>
+    <div id="mz-list"></div>
+  </div>
+
+  <!-- ============================================================
+       TEXT OVERLAY  (always visible)
+       ============================================================ -->
+  <div class="section">
+    <div class="section-title">
+      Text Overlay
+      <button class="btn btn-sm btn-add" id="btn-add-text">+ Add Text</button>
+    </div>
+    <div class="row" style="margin-bottom:4px">
+      <input type="checkbox" id="txt-enable" checked>
+      <span style="font-size:11.5px">Enable text overlay</span>
+    </div>
+    <div id="txt-list"></div>
+  </div>
+
+  <!-- Output Level -->
   <div class="section">
     <div class="section-title">Output Level</div>
-    <label>
-      <span>Brightness</span>
+    <div class="row">
+      <span class="lbl">Brightness</span>
       <input type="range" id="brightness" min="0" max="255" value="255">
       <span class="range-val" id="brightness-val">255</span>
-    </label>
-    <label>
-      <span>Threshold (1-bit)</span>
+    </div>
+    <div class="row">
+      <span class="lbl">1-bit Thr.</span>
       <input type="range" id="threshold" min="0" max="255" value="128">
       <span class="range-val" id="threshold-val">128</span>
-    </label>
+    </div>
   </div>
 
-  <!-- Export buttons -->
+  <!-- Export -->
   <div class="section">
     <div class="section-title">Export</div>
-    <button class="btn btn-export" id="btn-png">Save as PNG</button>
-    <button class="btn btn-bin"    id="btn-bin">Save 1-bit Binary (BRAM)</button>
-    <button class="btn btn-secondary" id="btn-copy-vhd">Copy as VHDL init string</button>
-    <p id="export-info" style="font-size:11px;color:#888;margin-top:8px"></p>
+    <button class="btn btn-export" id="btn-png">&#128247; Save as PNG</button>
+    <button class="btn btn-bin"    id="btn-bin">&#128190; Save 1-bit Binary (BRAM)</button>
+    <button class="btn btn-secondary btn-export" id="btn-copy-vhd">&#128203; Copy VHDL comment</button>
+    <p id="export-info" style="font-size:11px;color:#888;margin-top:7px"></p>
   </div>
-</div>
+</div><!-- end panel -->
 
-<!-- ===== Right: canvas ===== -->
+<!-- ============================= CANVAS ============================= -->
 <div id="canvas-area">
   <div id="canvas-wrap">
     <canvas id="main-canvas"></canvas>
     <canvas id="overlay-canvas"></canvas>
   </div>
-  <div id="info-bar">Hover over canvas to see pixel info</div>
+  <div id="info-bar">Hover canvas for pixel info</div>
 </div>
 
 <script>
 // ============================================================
-// State
+// DOM shortcuts
 // ============================================================
-const $ = id => document.getElementById(id);
+const $  = id => document.getElementById(id);
+const on = (el, ev, fn) => el.addEventListener(ev, fn);
 const cvs   = $('main-canvas');
-const octx  = $('overlay-canvas');
+const ovCvs = $('overlay-canvas');
 const ctx   = cvs.getContext('2d');
-const ovCtx = octx.getContext('2d');
+const ovCtx = ovCvs.getContext('2d');
 
 // ============================================================
-// Utilities
+// Colour utilities
 // ============================================================
 function hexToRgb(hex) {
-  const r = parseInt(hex.slice(1,3),16);
-  const g = parseInt(hex.slice(3,5),16);
-  const b = parseInt(hex.slice(5,7),16);
-  return [r,g,b];
+  const v = hex.replace('#','');
+  return [parseInt(v.slice(0,2),16), parseInt(v.slice(2,4),16), parseInt(v.slice(4,6),16)];
+}
+function lerpColor(a, b, t) {
+  return [
+    Math.round(a[0]+(b[0]-a[0])*t),
+    Math.round(a[1]+(b[1]-a[1])*t),
+    Math.round(a[2]+(b[2]-a[2])*t)
+  ];
+}
+function applyBri(c, bri) {
+  return [Math.round(c[0]*bri), Math.round(c[1]*bri), Math.round(c[2]*bri)];
 }
 
-function lerp(a,b,t) { return Math.round(a + (b-a)*t); }
-
-function lerpColor(c1, c2, t) {
-  return [lerp(c1[0],c2[0],t), lerp(c1[1],c2[1],t), lerp(c1[2],c2[2],t)];
+// ============================================================
+// Pattern fill helpers (operate directly on Uint8ClampedArray)
+// ============================================================
+function setPixel(d, w, x, y, r, g, b) {
+  const i = (y*w+x)*4;
+  d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
 }
 
-function drawPalOverlay(w, h) {
-  ovCtx.clearRect(0,0,w,h);
-  if (!$('pal-overlay').checked) return;
-  ovCtx.strokeStyle = 'rgba(255,80,80,0.55)';
-  ovCtx.lineWidth = 1;
-  ovCtx.setLineDash([4,3]);
-  // centre cross
-  ovCtx.beginPath();
-  ovCtx.moveTo(w/2, 0); ovCtx.lineTo(w/2, h);
-  ovCtx.moveTo(0, h/2); ovCtx.lineTo(w, h/2);
-  ovCtx.stroke();
-  // corner markers
-  const m = 20;
-  ovCtx.setLineDash([]);
-  ovCtx.strokeStyle = 'rgba(255,80,80,0.7)';
-  [[0,0],[w,0],[0,h],[w,h]].forEach(([x,y]) => {
-    const sx = x===0?1:-1, sy = y===0?1:-1;
-    ovCtx.beginPath();
-    ovCtx.moveTo(x,y+sy*m); ovCtx.lineTo(x,y); ovCtx.lineTo(x+sx*m,y);
-    ovCtx.stroke();
+// Fill a rectangular region with a pattern
+// pat: 'solid_white'|'solid_black'|'v_stripes'|'h_stripes'|'checker'|'v_grad'|'h_grad'
+// x0,y0 = top-left of region on full canvas; rw,rh = region size (local)
+function fillRegion(d, canvasW, x0, y0, rw, rh, pat, fg, bg, sw) {
+  for (let ly = 0; ly < rh; ly++) {
+    const y = y0 + ly;
+    if (y < 0) continue;
+    for (let lx = 0; lx < rw; lx++) {
+      const x = x0 + lx;
+      if (x < 0) continue;
+      let c;
+      switch (pat) {
+        case 'solid_white': c = fg; break;
+        case 'solid_black': c = bg; break;
+        case 'v_stripes':
+          c = (Math.floor(lx/sw) % 2 === 0) ? fg : bg; break;
+        case 'h_stripes':
+          c = (Math.floor(ly/sw) % 2 === 0) ? fg : bg; break;
+        case 'checker':
+          c = ((Math.floor(lx/sw)+Math.floor(ly/sw)) % 2 === 0) ? fg : bg; break;
+        case 'v_grad': {
+          const t = rw > 1 ? lx/(rw-1) : 0;
+          c = lerpColor(bg, fg, t); break;
+        }
+        case 'h_grad': {
+          const t = rh > 1 ? ly/(rh-1) : 0;
+          c = lerpColor(bg, fg, t); break;
+        }
+        default: c = bg;
+      }
+      setPixel(d, canvasW, x, y, c[0], c[1], c[2]);
+    }
+  }
+}
+
+// ============================================================
+// Main pattern fill dispatcher
+// ============================================================
+function fillPattern(d, w, h) {
+  const bri  = +$('brightness').value / 255;
+  const fgR  = applyBri(hexToRgb($('col-fg').value), bri);
+  const bgR  = applyBri(hexToRgb($('col-bg').value), bri);
+  const pat  = $('pat-type').value;
+
+  switch (pat) {
+    case 'solid_white':
+      fillRegion(d,w,0,0,w,h,'solid_white',fgR,bgR,1); break;
+
+    case 'solid_black':
+      fillRegion(d,w,0,0,w,h,'solid_black',fgR,bgR,1); break;
+
+    case 'v_stripes':
+      fillRegion(d,w,0,0,w,h,'v_stripes',fgR,bgR,+$('stripe-w').value||4); break;
+
+    case 'h_stripes':
+      fillRegion(d,w,0,0,w,h,'h_stripes',fgR,bgR,+$('stripe-w').value||4); break;
+
+    case 'checkerboard':
+      fillRegion(d,w,0,0,w,h,'checker',fgR,bgR,
+        Math.max(1,+$('check-w').value)); break;
+
+    case 'v_gradient': {
+      const steps = Math.max(2,+$('grad-steps').value);
+      const sw2 = Math.ceil(w/steps);
+      for (let s=0; s<steps; s++) {
+        const t = s/(steps-1);
+        const c = lerpColor(bgR, fgR, t);
+        fillRegion(d,w,s*sw2,0,sw2,h,'solid_white',c,c,1);
+      }
+      break;
+    }
+    case 'h_gradient': {
+      const steps = Math.max(2,+$('grad-steps').value);
+      const sh2 = Math.ceil(h/steps);
+      for (let s=0; s<steps; s++) {
+        const t = s/(steps-1);
+        const c = lerpColor(bgR, fgR, t);
+        fillRegion(d,w,0,s*sh2,w,sh2,'solid_white',c,c,1);
+      }
+      break;
+    }
+    case 'crosshatch': {
+      const ch = Math.max(1,+$('cross-h').value);
+      const cv = Math.max(1,+$('cross-v').value);
+      const lw = Math.max(1,+$('cross-lw').value);
+      for (let y=0; y<h; y++) {
+        for (let x=0; x<w; x++) {
+          const on = (x%ch)<lw || (y%cv)<lw;
+          const c  = on ? fgR : bgR;
+          setPixel(d,w,x,y,c[0],c[1],c[2]);
+        }
+      }
+      break;
+    }
+    case 'centre_cross': {
+      const cx = Math.floor(w/2), cy = Math.floor(h/2);
+      for (let y=0; y<h; y++) {
+        for (let x=0; x<w; x++) {
+          const c = (x===cx||y===cy) ? fgR : bgR;
+          setPixel(d,w,x,y,c[0],c[1],c[2]);
+        }
+      }
+      break;
+    }
+    case 'circle': {
+      const cx = +$('circ-cx').value, cy = +$('circ-cy').value;
+      const rx = Math.max(1,+$('circ-rx').value);
+      const ry = Math.max(1,+$('circ-ry').value);
+      const fill = $('circ-fill').checked;
+      for (let y=0; y<h; y++) {
+        for (let x=0; x<w; x++) {
+          const d2 = ((x-cx)/rx)**2 + ((y-cy)/ry)**2;
+          const on = fill ? d2<=1 : Math.abs(d2-1) < 2/Math.min(rx,ry);
+          const c  = on ? fgR : bgR;
+          setPixel(d,w,x,y,c[0],c[1],c[2]);
+        }
+      }
+      break;
+    }
+    case 'color_zones': {
+      // fill background first
+      fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
+      const zones = getColorZones();
+      let xp = 0;
+      for (const z of zones) {
+        const zw = Math.min(z.w, w-xp);
+        if (zw <= 0) break;
+        const zc = applyBri(hexToRgb(z.col), bri);
+        fillRegion(d,w,xp,0,zw,h,'solid_white',zc,zc,1);
+        xp += zw;
+      }
+      break;
+    }
+    case 'multi_zone': {
+      fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
+      const dir  = $('mz-dir').value;
+      const zones = getMultiZones();
+      let pos = 0;
+      for (const z of zones) {
+        const zfg = applyBri(hexToRgb(z.fg), bri);
+        const zbg = applyBri(hexToRgb(z.bg), bri);
+        const sw2  = Math.max(1, z.sw);
+        if (dir === 'v') {
+          const rw = Math.min(z.sz, w-pos);
+          if (rw <= 0) break;
+          fillRegion(d,w,pos,0,rw,h,z.pat,zfg,zbg,sw2);
+          pos += z.sz;
+        } else {
+          const rh = Math.min(z.sz, h-pos);
+          if (rh <= 0) break;
+          fillRegion(d,w,0,pos,w,rh,z.pat,zfg,zbg,sw2);
+          pos += z.sz;
+        }
+      }
+      break;
+    }
+    default:
+      fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
+  }
+}
+
+// ============================================================
+// Text overlay rendering
+// ============================================================
+function drawTextOverlay() {
+  if (!$('txt-enable').checked) return;
+  const entries = document.querySelectorAll('.txt-entry');
+  entries.forEach(e => {
+    const text  = e.querySelector('.t-text').value.trim();
+    if (!text) return;
+    const x     = +e.querySelector('.t-x').value || 20;
+    const y     = +e.querySelector('.t-y').value || 40;
+    const sz    = Math.max(6, +e.querySelector('.t-size').value || 24);
+    const col   = e.querySelector('.t-color').value;
+    const bgCol = e.querySelector('.t-bgcol').value;
+    const noBg  = e.querySelector('.t-nobg').checked;
+    const font  = e.querySelector('.t-font').value;
+    const bold  = e.querySelector('.t-bold').checked  ? 'bold '  : '';
+    const ital  = e.querySelector('.t-ital').checked  ? 'italic ' : '';
+    const align = e.querySelector('.t-align').value;
+    const base  = e.querySelector('.t-base').value;
+
+    ctx.save();
+    ctx.font         = `${bold}${ital}${sz}px ${font}`;
+    ctx.textAlign    = align;
+    ctx.textBaseline = base;
+    ctx.globalAlpha  = 1;
+
+    if (!noBg) {
+      const m   = ctx.measureText(text);
+      const tw  = m.width;
+      const th  = sz * 1.2;
+      let bx = x, by = y;
+      if (align === 'center') bx = x - tw/2;
+      if (align === 'right')  bx = x - tw;
+      if (base === 'middle')  by = y - th/2;
+      if (base === 'bottom')  by = y - th;
+      ctx.fillStyle = bgCol;
+      ctx.fillRect(bx-3, by-2, tw+6, th+4);
+    }
+    ctx.fillStyle = col;
+    ctx.fillText(text, x, y);
+    ctx.restore();
   });
 }
 
 // ============================================================
-// Pattern renderers — each fills imageData.data (RGBA)
+// Text entry management
 // ============================================================
-function fillPattern(imgData, w, h) {
-  const d  = imgData.data;
-  const fg = hexToRgb($('col-fg').value);
-  const bg = hexToRgb($('col-bg').value);
-  const bri = +$('brightness').value / 255;
-  const pat = $('pat-type').value;
+let txtCounter = 0;
 
-  function setPixel(x,y,c) {
-    const i = (y*w+x)*4;
-    d[i]   = Math.round(c[0]*bri);
-    d[i+1] = Math.round(c[1]*bri);
-    d[i+2] = Math.round(c[2]*bri);
-    d[i+3] = 255;
-  }
+function addTextEntry(text='Text', x=20, y=40, sz=32) {
+  const id = ++txtCounter;
+  const div = document.createElement('div');
+  div.className = 'txt-entry';
+  div.dataset.id = id;
+  div.innerHTML = `
+    <div class="txt-entry-head">
+      <input type="text" class="t-text" placeholder="Enter text…" value="${text}">
+      <button class="btn btn-sm btn-danger t-remove" title="Remove">&#10005;</button>
+    </div>
+    <div class="txt-grid">
+      <div class="row"><span class="lbl">X px</span>
+        <input type="number" class="t-x inp-sm" value="${x}"></div>
+      <div class="row"><span class="lbl">Y px</span>
+        <input type="number" class="t-y inp-sm" value="${y}"></div>
+      <div class="row"><span class="lbl">Size</span>
+        <input type="number" class="t-size inp-sm" value="${sz}" min="6" max="512"></div>
+      <div class="row"><span class="lbl">Colour</span>
+        <input type="color" class="t-color" value="#ffffff"></div>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <span class="lbl">BG Col</span>
+      <input type="color" class="t-bgcol" value="#000000">
+      <input type="checkbox" class="t-nobg" checked>
+      <span style="font-size:11px;color:#aaa">No BG</span>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <span class="lbl">Font</span>
+      <select class="t-font">
+        <option>monospace</option>
+        <option>sans-serif</option>
+        <option>serif</option>
+        <option>Arial</option>
+        <option>Courier New</option>
+        <option>Impact</option>
+      </select>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <span class="lbl">Style</span>
+      <input type="checkbox" class="t-bold">
+      <span style="font-size:11px;color:#aaa">Bold</span>
+      <input type="checkbox" class="t-ital" style="margin-left:6px">
+      <span style="font-size:11px;color:#aaa">Italic</span>
+    </div>
+    <div class="row" style="margin-top:4px">
+      <span class="lbl">Align</span>
+      <select class="t-align">
+        <option value="left" selected>Left</option>
+        <option value="center">Centre</option>
+        <option value="right">Right</option>
+      </select>
+      <select class="t-base" style="margin-left:4px">
+        <option value="alphabetic" selected>Baseline</option>
+        <option value="top">Top</option>
+        <option value="middle">Middle</option>
+        <option value="bottom">Bottom</option>
+      </select>
+    </div>`;
+  $('txt-list').appendChild(div);
 
-  function isFg(x,y) {
-    switch(pat) {
-      case 'solid_white':  return true;
-      case 'solid_black':  return false;
-      case 'v_stripes': {
-        const sw = +$('stripe-w').value;
-        return Math.floor(x/sw) % 2 === 0;
-      }
-      case 'h_stripes': {
-        const sw = +$('stripe-w').value;
-        return Math.floor(y/sw) % 2 === 0;
-      }
-      case 'checkerboard': {
-        const cw = +$('check-w').value;
-        const ch = +$('check-h').value;
-        return (Math.floor(x/cw) + Math.floor(y/ch)) % 2 === 0;
-      }
-      case 'v_gradient': {
-        const steps = +$('grad-steps').value;
-        const sw = w / steps;
-        const t = Math.min(Math.floor(x/sw), steps-1) / (steps-1);
-        return t; // return number 0..1 for gradient
-      }
-      case 'h_gradient': {
-        const steps = +$('grad-steps').value;
-        const sh = h / steps;
-        const t = Math.min(Math.floor(y/sh), steps-1) / (steps-1);
-        return t;
-      }
-      case 'crosshatch': {
-        const ch = +$('cross-h').value;
-        const cv = +$('cross-v').value;
-        const lw = +$('cross-lw').value;
-        return (x % ch) < lw || (y % cv) < lw;
-      }
-      case 'centre_cross': {
-        return x === Math.floor(w/2) || y === Math.floor(h/2);
-      }
-      case 'circle': {
-        const cx = +$('circ-cx').value;
-        const cy = +$('circ-cy').value;
-        const rx = +$('circ-rx').value;
-        const ry = +$('circ-ry').value;
-        const fill = $('circ-fill').checked;
-        const d2 = ((x-cx)/rx)**2 + ((y-cy)/ry)**2;
-        if (fill) return d2 <= 1;
-        return Math.abs(d2-1) < 2/Math.min(rx,ry);
-      }
-      case 'zones': {
-        return getZoneColor(x, w); // returns color directly
-      }
-      default: return false;
-    }
-  }
-
-  if (pat === 'v_gradient' || pat === 'h_gradient') {
-    for (let y=0; y<h; y++) {
-      for (let x=0; x<w; x++) {
-        const t = isFg(x,y);
-        setPixel(x, y, lerpColor(bg, fg, t));
-      }
-    }
-    return;
-  }
-
-  if (pat === 'zones') {
-    const zones = getZones();
-    let xpos = 0;
-    for (const z of zones) {
-      const c = hexToRgb(z.color);
-      const xe = Math.min(xpos + z.width, w);
-      for (let y=0; y<h; y++) {
-        for (let x=xpos; x<xe; x++) {
-          setPixel(x, y, c.map(v=>Math.round(v*bri)));
-        }
-      }
-      xpos = xe;
-    }
-    // fill any remainder
-    for (let y=0; y<h; y++) {
-      for (let x=xpos; x<w; x++) {
-        setPixel(x, y, bg);
-      }
-    }
-    return;
-  }
-
-  for (let y=0; y<h; y++) {
-    for (let x=0; x<w; x++) {
-      setPixel(x, y, isFg(x,y) ? fg : bg);
-    }
-  }
+  // Wire events inside this entry
+  div.querySelectorAll('input, select').forEach(el => on(el,'input', render));
+  div.querySelector('.t-remove').addEventListener('click', () => {
+    div.remove(); render();
+  });
+  render();
 }
 
 // ============================================================
-// Zone list management
+// Colour zone management (simple colour zones)
 // ============================================================
-const ZONE_COLORS = [
-  '#ffffff','#aaaaaa','#777777','#444444',
-  '#ffffff','#888888','#333333','#000000',
-  '#cccccc','#555555','#222222','#eeeeee',
-  '#bbbbbb','#666666','#111111','#dddddd',
-  '#999999','#0f0f0f','#f0f0f0','#505050',
+const CZ_DEFAULTS = [
+  '#ffffff','#dddddd','#bbbbbb','#999999',
+  '#777777','#555555','#333333','#111111',
+  '#ffffff','#aaaaaa','#555555','#000000',
+  '#eeeeee','#888888','#222222','#cccccc',
+  '#666666','#0f0f0f','#f0f0f0','#505050',
   '#303030','#c0c0c0','#707070','#e0e0e0',
   '#404040','#b0b0b0','#808080','#202020',
   '#909090','#101010','#f8f8f8','#080808',
 ];
 
-function buildZoneList() {
-  const count = Math.max(1, Math.min(32, +$('zone-count').value));
-  const w = +$('cvs-w').value;
-  const defW = Math.floor(w / count);
-  const list = $('zone-list');
+function buildColorZoneList() {
+  const count = Math.max(1, Math.min(32, +$('cz-count').value));
+  const w     = +$('cvs-w').value;
+  const dw    = Math.floor(w / count);
+  const list  = $('cz-list');
   list.innerHTML = '';
-  for (let i=0; i<count; i++) {
+  for (let i = 0; i < count; i++) {
     const row = document.createElement('div');
-    row.className = 'zone-row';
+    row.className = 'row';
     row.innerHTML = `
-      <input type="color" class="z-col" value="${ZONE_COLORS[i % ZONE_COLORS.length]}">
-      <span>Zone ${i+1}</span>
-      <input type="number" class="z-w" value="${defW}" min="1" max="1920">
-    `;
+      <span class="lbl" style="font-size:11px">Zone ${i+1}</span>
+      <input type="color" class="cz-col" value="${CZ_DEFAULTS[i % CZ_DEFAULTS.length]}">
+      <input type="number" class="cz-w inp-sm" value="${dw}" min="1" max="1920">
+      <span style="font-size:11px;color:#888">px</span>`;
     list.appendChild(row);
   }
-  addZoneListeners();
+  list.querySelectorAll('input').forEach(el => on(el,'input', render));
 }
 
-function addZoneListeners() {
-  $('zone-list').querySelectorAll('input').forEach(inp => {
-    inp.addEventListener('input', render);
-  });
-}
-
-function getZones() {
-  const rows = $('zone-list').querySelectorAll('.zone-row');
-  return Array.from(rows).map(r => ({
-    color: r.querySelector('.z-col').value,
-    width: Math.max(1, +r.querySelector('.z-w').value),
+function getColorZones() {
+  return Array.from($('cz-list').querySelectorAll('.row')).map(r => ({
+    col: r.querySelector('.cz-col').value,
+    w:   Math.max(1, +r.querySelector('.cz-w').value),
   }));
 }
 
-function getZoneColor(x, w) { return false; } // unused (handled above)
+// ============================================================
+// Multi-zone management
+// ============================================================
+const MZ_PATTERNS = [
+  { val:'solid_white', lbl:'Solid White'         },
+  { val:'solid_black', lbl:'Solid Black'         },
+  { val:'v_stripes',   lbl:'Alt B/W - Vertical'  },
+  { val:'h_stripes',   lbl:'Alt B/W - Horizontal'},
+  { val:'checker',     lbl:'Checkerboard'        },
+  { val:'v_grad',      lbl:'Gradient (L→R)'      },
+  { val:'h_grad',      lbl:'Gradient (T→B)'      },
+];
+
+function buildMultiZoneList() {
+  const count = Math.max(1, Math.min(32, +$('mz-count').value));
+  const dir   = $('mz-dir').value;
+  const total = dir === 'v' ? +$('cvs-w').value : +$('cvs-h').value;
+  const dz    = Math.floor(total / count);
+  const list  = $('mz-list');
+  list.innerHTML = '';
+  const opts  = MZ_PATTERNS.map(p =>
+    `<option value="${p.val}">${p.lbl}</option>`).join('');
+
+  for (let i = 0; i < count; i++) {
+    const div = document.createElement('div');
+    div.className = 'mz-entry';
+    div.innerHTML = `
+      <div class="mz-row1">
+        <span class="mz-label">Zone ${i+1}</span>
+        <select class="mz-pat" style="flex:1">${opts}</select>
+      </div>
+      <div class="mz-row2">
+        <span style="font-size:10.5px;color:#aaa;flex:0 0 44px">Size px</span>
+        <input type="number" class="mz-sz inp-sm" value="${dz}" min="1" max="2000">
+        <span style="font-size:10.5px;color:#aaa;margin-left:4px">SW</span>
+        <input type="number" class="mz-sw inp-sm" value="4" min="1" max="512">
+        <input type="color" class="mz-fg" value="#ffffff" title="Foreground">
+        <input type="color" class="mz-bg" value="#000000" title="Background">
+      </div>`;
+    list.appendChild(div);
+  }
+  list.querySelectorAll('input, select').forEach(el => on(el,'input', render));
+}
+
+function getMultiZones() {
+  return Array.from($('mz-list').querySelectorAll('.mz-entry')).map(e => ({
+    pat: e.querySelector('.mz-pat').value,
+    sz:  Math.max(1, +e.querySelector('.mz-sz').value),
+    sw:  Math.max(1, +e.querySelector('.mz-sw').value),
+    fg:  e.querySelector('.mz-fg').value,
+    bg:  e.querySelector('.mz-bg').value,
+  }));
+}
+
+// ============================================================
+// PAL guide overlay
+// ============================================================
+function drawPalOverlay(w, h) {
+  ovCtx.clearRect(0, 0, w, h);
+  if (!$('pal-overlay').checked) return;
+  ovCtx.save();
+  ovCtx.strokeStyle = 'rgba(233,69,96,0.55)';
+  ovCtx.lineWidth   = 1;
+  ovCtx.setLineDash([4,3]);
+  ovCtx.beginPath();
+  ovCtx.moveTo(w/2,0); ovCtx.lineTo(w/2,h);
+  ovCtx.moveTo(0,h/2); ovCtx.lineTo(w,h/2);
+  ovCtx.stroke();
+  const m = 18;
+  ovCtx.setLineDash([]);
+  ovCtx.strokeStyle = 'rgba(233,69,96,0.75)';
+  [[0,0],[w,0],[0,h],[w,h]].forEach(([cx,cy]) => {
+    const sx = cx===0?1:-1, sy = cy===0?1:-1;
+    ovCtx.beginPath();
+    ovCtx.moveTo(cx,cy+sy*m); ovCtx.lineTo(cx,cy); ovCtx.lineTo(cx+sx*m,cy);
+    ovCtx.stroke();
+  });
+  ovCtx.restore();
+}
+
+// ============================================================
+// Section visibility
+// ============================================================
+const SEC_MAP = {
+  solid_white:  [],
+  solid_black:  [],
+  v_stripes:    ['sec-stripes'],
+  h_stripes:    ['sec-stripes'],
+  checkerboard: ['sec-checker'],
+  v_gradient:   ['sec-gradient'],
+  h_gradient:   ['sec-gradient'],
+  crosshatch:   ['sec-crosshatch'],
+  centre_cross: [],
+  circle:       ['sec-circle'],
+  color_zones:  ['sec-color-zones'],
+  multi_zone:   ['sec-multi-zone'],
+};
+const ALL_SECS = ['sec-stripes','sec-checker','sec-gradient','sec-crosshatch',
+                  'sec-circle','sec-color-zones','sec-multi-zone'];
+
+function updateSections() {
+  ALL_SECS.forEach(id => $(id).classList.add('hidden'));
+  (SEC_MAP[$('pat-type').value] || []).forEach(id => $(id).classList.remove('hidden'));
+  render();
+}
 
 // ============================================================
 // Main render
@@ -519,209 +882,174 @@ function render() {
   const w = Math.max(1, Math.min(1920, +$('cvs-w').value));
   const h = Math.max(1, Math.min(1080, +$('cvs-h').value));
 
-  cvs.width  = w;
-  cvs.height = h;
-  octx.width  = w;
-  octx.height = h;
+  cvs.width  = w;  cvs.height  = h;
+  ovCvs.width = w; ovCvs.height = h;
 
-  // Scale canvas to fit the viewport
-  const wrap = document.getElementById('canvas-wrap');
-  const maxW = wrap.parentElement.clientWidth  - 20;
-  const maxH = wrap.parentElement.clientHeight - 60;
+  // Scale to fit
+  const maxW  = $('canvas-area').clientWidth  - 20;
+  const maxH  = $('canvas-area').clientHeight - 50;
   const scale = Math.min(1, maxW/w, maxH/h);
-  cvs.style.width  = Math.round(w*scale)+'px';
-  cvs.style.height = Math.round(h*scale)+'px';
-  octx.style.width  = cvs.style.width;
-  octx.style.height = cvs.style.height;
+  const sw = Math.round(w*scale)+'px', sh = Math.round(h*scale)+'px';
+  cvs.style.width  = sw; cvs.style.height  = sh;
+  ovCvs.style.width = sw; ovCvs.style.height = sh;
 
-  const imgData = ctx.createImageData(w, h);
-  fillPattern(imgData, w, h);
-  ctx.putImageData(imgData, 0, 0);
+  // 1. Fill main pattern
+  const img = ctx.createImageData(w, h);
+  fillPattern(img.data, w, h);
+  ctx.putImageData(img, 0, 0);
 
+  // 2. Text overlay (drawn on main canvas so it's baked into exports)
+  drawTextOverlay();
+
+  // 3. PAL guide (separate overlay canvas)
   drawPalOverlay(w, h);
-  updateInfo(w, h);
+
+  updateInfoBar(w, h);
 }
 
-function updateInfo(w,h) {
-  const bits = w * h;
-  const bytes = Math.ceil(bits/8);
+function updateInfoBar(w, h) {
+  const px    = w*h;
+  const bytes = Math.ceil(px/8);
   $('info-bar').textContent =
-    `${w} x ${h}  |  ${bits.toLocaleString()} px  |  BRAM: ${bytes.toLocaleString()} bytes  (${(bytes/1024).toFixed(1)} KB)`;
+    `${w} × ${h}  |  ${px.toLocaleString()} px  |  BRAM: ${bytes.toLocaleString()} bytes (${(bytes/1024).toFixed(1)} KB)`;
   $('export-info').textContent =
-    `1-bit binary: ${bytes.toLocaleString()} bytes (MSB-first row order, 520-px stride)`;
+    `1-bit: ${bytes.toLocaleString()} bytes · MSB-first · row stride ${w} px`;
 }
 
 // ============================================================
-// Section visibility
+// Export — PNG
 // ============================================================
-const SEC_MAP = {
-  solid_white:   [],
-  solid_black:   [],
-  v_stripes:     ['sec-stripes'],
-  h_stripes:     ['sec-stripes'],
-  checkerboard:  ['sec-checker'],
-  v_gradient:    ['sec-gradient'],
-  h_gradient:    ['sec-gradient'],
-  crosshatch:    ['sec-crosshatch'],
-  centre_cross:  [],
-  circle:        ['sec-circle'],
-  zones:         ['sec-zones'],
-};
-
-function updateSections() {
-  const all = ['sec-stripes','sec-checker','sec-gradient','sec-crosshatch','sec-circle','sec-zones'];
-  const pat = $('pat-type').value;
-  all.forEach(id => $(id).classList.add('hidden'));
-  (SEC_MAP[pat]||[]).forEach(id => $(id).classList.remove('hidden'));
-  render();
-}
-
-// ============================================================
-// Export: PNG
-// ============================================================
-$('btn-png').addEventListener('click', () => {
+on($('btn-png'),'click', () => {
   const a = document.createElement('a');
   a.href     = cvs.toDataURL('image/png');
-  a.download = `bram_pattern_${cvs.width}x${cvs.height}.png`;
+  a.download = `bram_${cvs.width}x${cvs.height}.png`;
   a.click();
 });
 
 // ============================================================
-// Export: 1-bit binary (MSB-first, row stride = canvas width)
+// Export — 1-bit binary
 // ============================================================
-$('btn-bin').addEventListener('click', () => {
+on($('btn-bin'),'click', () => {
   const w = cvs.width, h = cvs.height;
-  const imgData = ctx.getImageData(0, 0, w, h);
-  const d = imgData.data;
+  const px  = ctx.getImageData(0, 0, w, h).data;  // reads post-text canvas
   const thr = +$('threshold').value;
-  const rowBytes = Math.ceil(w/8);
-  const buf = new Uint8Array(rowBytes * h);
-
+  const rowB = Math.ceil(w/8);
+  const buf  = new Uint8Array(rowB * h);
   for (let y=0; y<h; y++) {
     for (let x=0; x<w; x++) {
       const i = (y*w+x)*4;
-      const lum = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
-      if (lum >= thr) {
-        const bi = y*rowBytes + Math.floor(x/8);
-        buf[bi] |= (0x80 >> (x%8));
-      }
+      const l = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
+      if (l >= thr) buf[y*rowB + (x>>3)] |= (0x80 >> (x&7));
     }
   }
-
-  const blob = new Blob([buf], {type:'application/octet-stream'});
   const a = document.createElement('a');
-  a.href     = URL.createObjectURL(blob);
-  a.download = `bram_pattern_${w}x${h}.bin`;
+  a.href     = URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
+  a.download = `bram_${w}x${h}.bin`;
   a.click();
 });
 
 // ============================================================
-// Export: VHDL init string snippet (first 64 bytes as hex comment)
+// Export — VHDL snippet to clipboard
 // ============================================================
-$('btn-copy-vhd').addEventListener('click', () => {
+on($('btn-copy-vhd'),'click', () => {
   const w = cvs.width, h = cvs.height;
-  const imgData = ctx.getImageData(0, 0, w, h);
-  const d = imgData.data;
+  const px  = ctx.getImageData(0,0,w,h).data;
   const thr = +$('threshold').value;
-  const rowBytes = Math.ceil(w/8);
-  const total = rowBytes * h;
-  const buf = new Uint8Array(total);
-
-  for (let y=0; y<h; y++) {
+  const rowB = Math.ceil(w/8);
+  const buf  = new Uint8Array(rowB*h);
+  for (let y=0; y<h; y++)
     for (let x=0; x<w; x++) {
       const i = (y*w+x)*4;
-      const lum = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
-      if (lum >= thr) {
-        const bi = y*rowBytes + Math.floor(x/8);
-        buf[bi] |= (0x80 >> (x%8));
-      }
+      const l = 0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+      if (l>=thr) buf[y*rowB+(x>>3)] |= (0x80>>(x&7));
     }
-  }
-
-  // Build a VHDL comment + array constant snippet
-  const preview = Array.from(buf.slice(0,64))
-    .map(b => b.toString(16).padStart(2,'0').toUpperCase())
-    .join(' ');
-
+  const prev = Array.from(buf.slice(0,64))
+    .map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
   const vhd = [
-    `-- BRAM Pattern: ${w}x${h} px,  ${total} bytes`,
+    `-- BRAM Pattern: ${w}x${h} px, ${buf.length} bytes`,
     `-- Generated by bram_pattern_gen.html`,
-    `-- First 64 bytes (hex, MSB-first): ${preview}${total>64?' ...':''}`,
-    `-- Load with bram_wr_en pulse loop or $readmemh.`,
-    ``,
-    `-- To load via simulation:`,
-    `--   use std.textio.all;`,
-    `--   file f : text open read_mode is "bram_pattern_${w}x${h}.bin";`,
-    `--   (see project scripts for binary-to-BRAM helper)`,
+    `-- First 64 bytes (MSB-first hex): ${prev}${buf.length>64?' ...':''}`,
+    `-- Load via bram_wr_en pulse loop or $readmemh (PAL: sel=4, bram_len=${w*h}).`,
   ].join('\n');
-
   navigator.clipboard.writeText(vhd).then(() => {
-    $('export-info').textContent = 'VHDL snippet copied to clipboard!';
-    setTimeout(() => updateInfo(w,h), 2000);
+    $('export-info').textContent = 'VHDL comment copied to clipboard!';
+    setTimeout(() => updateInfoBar(w,h), 2500);
   });
 });
 
 // ============================================================
-// Wire up all controls
+// Hover pixel info
 // ============================================================
-['cvs-w','cvs-h','col-fg','col-bg',
- 'stripe-w','check-w','check-h','grad-steps',
- 'cross-h','cross-v','cross-lw',
- 'circ-cx','circ-cy','circ-rx','circ-ry',
- 'zone-count',
-].forEach(id => $(id)?.addEventListener('input', render));
-
-['circ-fill','pal-overlay'].forEach(id =>
-  $(id)?.addEventListener('change', render)
-);
-
-$('pat-type').addEventListener('change', updateSections);
-
-$('brightness').addEventListener('input', () => {
-  $('brightness-val').textContent = $('brightness').value;
-  render();
-});
-$('threshold').addEventListener('input', () => {
-  $('threshold-val').textContent = $('threshold').value;
-});
-
-$('fmt-preset').addEventListener('change', () => {
-  const v = $('fmt-preset').value;
-  if (!v) return;
-  const [w,h] = v.split(',').map(Number);
-  $('cvs-w').value = w;
-  $('cvs-h').value = h;
-  $('circ-cx').value = Math.floor(w/2);
-  $('circ-cy').value = Math.floor(h/2);
-  render();
-});
-
-$('btn-gen-zones').addEventListener('click', () => {
-  buildZoneList();
-  render();
-});
-
-// hover pixel info
-document.getElementById('canvas-wrap').addEventListener('mousemove', e => {
-  const rect = cvs.getBoundingClientRect();
-  const scaleX = cvs.width  / rect.width;
-  const scaleY = cvs.height / rect.height;
-  const mx = Math.floor((e.clientX - rect.left) * scaleX);
-  const my = Math.floor((e.clientY - rect.top)  * scaleY);
+on($('canvas-wrap'),'mousemove', e => {
+  const r  = cvs.getBoundingClientRect();
+  const sx = cvs.width  / r.width;
+  const sy = cvs.height / r.height;
+  const mx = Math.floor((e.clientX-r.left)*sx);
+  const my = Math.floor((e.clientY-r.top )*sy);
   if (mx<0||my<0||mx>=cvs.width||my>=cvs.height) return;
-  const px = ctx.getImageData(mx, my, 1, 1).data;
-  const lum = Math.round(0.299*px[0]+0.587*px[1]+0.114*px[2]);
+  const d  = ctx.getImageData(mx,my,1,1).data;
+  const lm = Math.round(0.299*d[0]+0.587*d[1]+0.114*d[2]);
   $('info-bar').textContent =
-    `x=${mx}  y=${my}  |  R=${px[0]} G=${px[1]} B=${px[2]}  |  ` +
-    `Lum=${lum}  (BRAM bit: ${lum >= +$('threshold').value ? 1 : 0})  |  ` +
+    `x=${mx}  y=${my}  │  R=${d[0]} G=${d[1]} B=${d[2]}  │  ` +
+    `Lum=${lm}  (1-bit: ${lm>= +$('threshold').value?1:0})  │  ` +
     `BRAM addr: ${my*cvs.width+mx}`;
 });
 
 // ============================================================
+// Wire controls
+// ============================================================
+[
+  'cvs-w','cvs-h','col-fg','col-bg',
+  'stripe-w','check-w','check-h','grad-steps',
+  'cross-h','cross-v','cross-lw',
+  'circ-cx','circ-cy','circ-rx','circ-ry',
+].forEach(id => {
+  const el = $(id);
+  if (el) on(el,'input', render);
+});
+on($('circ-fill'),   'change', render);
+on($('pal-overlay'), 'change', render);
+on($('txt-enable'),  'change', render);
+on($('pat-type'),    'change', updateSections);
+
+on($('brightness'),'input', () => {
+  $('brightness-val').textContent = $('brightness').value; render();
+});
+on($('threshold'),'input', () => {
+  $('threshold-val').textContent = $('threshold').value;
+});
+
+on($('fmt-preset'),'change', () => {
+  const v = $('fmt-preset').value; if (!v) return;
+  const [fw,fh] = v.split(',').map(Number);
+  $('cvs-w').value = fw; $('cvs-h').value = fh;
+  $('circ-cx').value = Math.floor(fw/2);
+  $('circ-cy').value = Math.floor(fh/2);
+  render();
+});
+
+on($('btn-add-text'),'click', () => {
+  const w = +$('cvs-w').value, h = +$('cvs-h').value;
+  addTextEntry('Text', 20, Math.min(40 + $('txt-list').childElementCount*40, h-20), 32);
+});
+
+on($('btn-regen-czones'),'click', () => { buildColorZoneList(); render(); });
+on($('cz-count'),        'input', () => { buildColorZoneList(); render(); });
+
+on($('btn-regen-mz'), 'click', () => { buildMultiZoneList(); render(); });
+on($('mz-count'),     'input', () => { buildMultiZoneList(); render(); });
+on($('mz-dir'),       'change',() => { buildMultiZoneList(); render(); });
+
+// ============================================================
 // Init
 // ============================================================
-buildZoneList();
-updateSections();   // calls render()
+function init() {
+  buildColorZoneList();
+  buildMultiZoneList();
+  addTextEntry('PAL TEST', 20, 40, 36);
+  updateSections();  // triggers render()
+}
+init();
 </script>
 </body>
 </html>
