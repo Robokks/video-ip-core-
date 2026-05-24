@@ -1,0 +1,12 @@
+tv/bram/tb_new_patterns.vhd:109:7:@1600550ns:(report note): === Chk1 PASS: sel=6 full white - all 520 px = WHITE ===
+tv/bram/tb_new_patterns.vhd:125:7:@1664550ns:(report note): === Chk2 PASS: sel=7 full black - all 520 px = BLANK ===
+tv/bram/tb_new_patterns.vhd:141:7:@1676550ns:(report note):   Chk3a PASS: px0 = WHITE (crosshatch grid line)
+tv/bram/tb_new_patterns.vhd:148:7:@1679150ns:(report note):   Chk3b PASS: px26 = BLANK (crosshatch interior)
+tv/bram/tb_new_patterns.vhd:155:7:@1681750ns:(report note): === Chk3 PASS: sel=8 crosshatch - px0=WHITE px26=BLANK px52=WHITE ===
+tv/bram/tb_new_patterns.vhd:172:7:@1766450ns:(report note):   Chk4a PASS: px259 = BLANK (before centre)
+tv/bram/tb_new_patterns.vhd:178:7:@1766550ns:(report note):   Chk4b PASS: px260 = WHITE (centre column)
+tv/bram/tb_new_patterns.vhd:184:7:@1766650ns:(report note): === Chk4 PASS: sel=9 centre cross - px260=WHITE flanked by BLANK ===
+tv/bram/tb_new_patterns.vhd:215:7:@3367050ns:(report note): === Chk5 PASS: ball 100-wide - px0-99=WHITE  px100-519=BLACK ===
+tv/bram/tb_new_patterns.vhd:220:5:@3367050ns:(report note): === tb_new_patterns: all checks complete ===
+simulation finished @3367050ns
+EXIT:0

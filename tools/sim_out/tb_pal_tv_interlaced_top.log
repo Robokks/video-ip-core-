@@ -1,0 +1,7 @@
+tv/opt2_interlaced/tb_pal_tv_interlaced_top.vhd:167:5:@1600500ns:(report note): === Field-1 vertical bars PASSED (520 px) ===
+tv/opt2_interlaced/tb_pal_tv_interlaced_top.vhd:219:5:@1600500ns:(report note): === 20% contrast Field-1 vertical bars PASSED (520 px) ===
+tv/opt2_interlaced/tb_pal_tv_interlaced_top.vhd:194:5:@21568500ns:(report note): === Field-2 vertical bars PASSED (520 px) ===
+tv/opt2_interlaced/tb_pal_tv_interlaced_top.vhd:141:5:@40187750ns:(report note): === Interlaced sync pulse shapes PASSED ===
+tv/opt2_interlaced/tb_pal_tv_interlaced_top.vhd:84:5:@46400500ns:(report note): === Simulation complete ===
+simulation finished @46400500ns
+EXIT:0

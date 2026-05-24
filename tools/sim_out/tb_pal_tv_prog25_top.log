@@ -1,0 +1,8 @@
+tv/opt3_prog25/tb_pal_tv_prog25_top.vhd:219:5:@1664500ns:(report note): === 20% contrast vertical bars PASSED (520 px) ===
+tv/opt3_prog25/tb_pal_tv_prog25_top.vhd:177:5:@1664500ns:(report note): === HORIZONTAL gradient PASSED (520 px) ===
+tv/opt3_prog25/tb_pal_tv_prog25_top.vhd:140:5:@1664500ns:(report note): === VERTICAL bars PASSED (520 px) ===
+tv/opt3_prog25/tb_pal_tv_prog25_top.vhd:194:5:@11148500ns:(report note): === VERTICAL gradient PASSED (150 lines) ===
+tv/opt3_prog25/tb_pal_tv_prog25_top.vhd:157:5:@11148500ns:(report note): === HORIZONTAL bars PASSED (150 lines) ===
+tv/opt3_prog25/tb_pal_tv_prog25_top.vhd:100:5:@12800500ns:(report note): === Simulation complete ===
+simulation finished @12800500ns
+EXIT:0

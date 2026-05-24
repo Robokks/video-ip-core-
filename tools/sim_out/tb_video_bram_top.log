@@ -1,0 +1,6 @@
+tv/bram/tb_video_bram_top.vhd:134:5:@1399700ns:(report note): === NTSC Chk2 PASS: F1-L0 sel=5  px0-59=WHITE  px60-519=BLACK ===
+tv/bram/tb_video_bram_top.vhd:105:5:@1600500ns:(report note): === PAL Chk1 PASS: F1-L0 sel=5  px0-59=WHITE  px60-519=BLACK ===
+tv/bram/tb_video_bram_top.vhd:154:5:@40000500ns:(report note): === PAL Chk3 PASS: DAC levels valid over 400000 samples ===
+tv/bram/tb_video_bram_top.vhd:76:5:@80000500ns:(report note): === tb_video_bram_top complete ===
+simulation finished @80000500ns
+EXIT:0

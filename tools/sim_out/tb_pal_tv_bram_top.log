@@ -1,0 +1,7 @@
+tv/bram/tb_pal_tv_bram_top.vhd:163:5:@1600800ns:(report note): === sel=0 vertical bars PASSED (520 px) ===
+tv/bram/tb_pal_tv_bram_top.vhd:191:5:@1600800ns:(report note): === BRAM F1 line 0 (image row 0, addr 0..519) PASSED ===
+tv/bram/tb_pal_tv_bram_top.vhd:226:5:@21568800ns:(report note): === BRAM F2 line 0 (image row 1, addr 520..1039) PASSED ===
+tv/bram/tb_pal_tv_bram_top.vhd:227:5:@21568800ns:(report note):     (px0=BLANK + px519=WHITE proves natural sequential row addressing)
+tv/bram/tb_pal_tv_bram_top.vhd:137:5:@46400750ns:(report note): === Simulation complete ===
+simulation finished @46400750ns
+EXIT:0

@@ -1,0 +1,10 @@
+tv/bram/tb_pal_bram_loader.vhd:146:5:@55ns:(report note): --- Test 1: Normal load ---
+tv/bram/tb_pal_bram_loader.vhd:155:5:@335ns:(report note): --- Test 1 complete ---
+tv/bram/tb_pal_bram_loader.vhd:161:5:@335ns:(report note): --- Test 2: Stall test ---
+tv/bram/tb_pal_bram_loader.vhd:177:5:@725ns:(report note): --- Test 2 complete (stall handled) ---
+tv/bram/tb_pal_bram_loader.vhd:183:5:@735ns:(report note): --- Test 3: Re-trigger ---
+tv/bram/tb_pal_bram_loader.vhd:233:5:@1005ns:(report note): === Checker: all 24 writes correct ===
+tv/bram/tb_pal_bram_loader.vhd:189:5:@1005ns:(report note): --- Test 3 complete ---
+tv/bram/tb_pal_bram_loader.vhd:192:5:@1035ns:(report note): === All tests PASSED ===
+simulation finished @1035ns
+EXIT:0

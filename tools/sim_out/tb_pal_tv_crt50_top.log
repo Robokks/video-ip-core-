@@ -1,0 +1,8 @@
+tv/opt1_crt50/tb_pal_tv_crt50_top.vhd:228:5:@1408500ns:(report note): === 20% contrast vertical bars PASSED (520 px) ===
+tv/opt1_crt50/tb_pal_tv_crt50_top.vhd:184:5:@1408500ns:(report note): === HORIZONTAL gradient PASSED (520 px) ===
+tv/opt1_crt50/tb_pal_tv_crt50_top.vhd:145:5:@1408500ns:(report note): === VERTICAL bars PASSED (520 px) ===
+tv/opt1_crt50/tb_pal_tv_crt50_top.vhd:202:5:@7692500ns:(report note): === VERTICAL gradient PASSED (100 lines) ===
+tv/opt1_crt50/tb_pal_tv_crt50_top.vhd:163:5:@7692500ns:(report note): === HORIZONTAL bars PASSED (100 lines) ===
+tv/opt1_crt50/tb_pal_tv_crt50_top.vhd:103:5:@20480500ns:(report note): === Simulation complete ===
+simulation finished @20480500ns
+EXIT:0
