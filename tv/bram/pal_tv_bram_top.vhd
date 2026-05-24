@@ -12,7 +12,11 @@ use ieee.numeric_std.all;
 -- sel 2  Horizontal gradient  (10 grey steps)
 -- sel 3  Vertical gradient    (10 grey steps)
 -- sel 4  BRAM pixel source    (Boolean: 0 = black_lvl, 1 = brightness)
--- sel 5  Bouncing ball        (white rectangle on black background, no BRAM needed)
+-- sel 5  Bouncing ball        (white rectangle on black background; size/speed via ports)
+-- sel 6  Full white           (peak-white screen — DAC calibration)
+-- sel 7  Full black           (black-burst screen — DAC calibration)
+-- sel 8  Crosshatch grid      (H+V grid lines; spacing controlled via cross_h_i/cross_v_i)
+-- sel 9  Centre cross         (single H + single V centre line)
 --
 -- BRAM write port (host side, independent of pixel clock):
 --   bram_wr_en   pulse '1' for one clock to write one pixel
@@ -74,6 +78,14 @@ entity pal_tv_bram_top is
     bram_wr_data : in  std_logic                     := '0';
     -- Number of valid pixels in BRAM (address wraps here)
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
+    -- Ball animation control (sel = 5)
+    ball_spd_h   : in  std_logic_vector(3 downto 0) := "0011";   -- horiz speed 1–15 px/frame
+    ball_spd_v   : in  std_logic_vector(3 downto 0) := "0010";   -- vert  speed 1–15 rows/frame
+    ball_w_i     : in  std_logic_vector(9 downto 0) := "0000111100";  -- ball width  in px  (def 60)
+    ball_h_i     : in  std_logic_vector(9 downto 0) := "0000110010";  -- ball height in rows (def 50)
+    -- Crosshatch control (sel = 8)
+    cross_h_i    : in  std_logic_vector(9 downto 0) := "0000110100";  -- H grid spacing px  (def 52)
+    cross_v_i    : in  std_logic_vector(9 downto 0) := "0000111010";  -- V grid spacing rows(def 58)
     -- Video outputs
     dac_out       : out std_logic_vector(3 downto 0);
     csync_o       : out std_logic;   -- composite sync (H+V merged; 1 = sync tip)
@@ -110,9 +122,20 @@ architecture rtl of pal_tv_bram_top is
   constant GZONE_W : integer := H_ACTIVE  / GZONES;   -- 52
   constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28
 
-  -- Bouncing ball (sel = 5)
-  constant BALL_W  : integer := 60;   -- ball width  (pixels)
-  constant BALL_H  : integer := 50;   -- ball height (screen rows)
+  -- Bouncing ball (sel = 5) — runtime-controllable size and speed
+  signal ball_w_s      : integer range 1 to 520 := 60;
+  signal ball_h_s      : integer range 1 to 576 := 50;
+  signal ball_spd_h_s  : integer range 1 to 15  := 3;
+  signal ball_spd_v_s  : integer range 1 to 15  := 2;
+
+  -- Crosshatch grid (sel = 8)
+  signal cross_h_s     : integer range 1 to 520 := 52;
+  signal cross_v_s     : integer range 1 to 576 := 58;
+  signal cross_x_cnt   : integer range 0 to 519 := 0;
+  signal cross_y_cnt   : integer range 0 to 575 := 0;
+  signal cross_on      : std_logic;
+  -- Centre cross (sel = 9)
+  signal centre_on     : std_logic;
 
 
   -- -----------------------------------------------------------------------
@@ -198,6 +221,28 @@ begin
     report "GZONES * GZONE_W /= H_ACTIVE" severity failure;
 
   sel_i <= to_integer(unsigned(sel));
+
+  -- -----------------------------------------------------------------------
+  -- Port-driven runtime parameters: ball size / speed, crosshatch pitch
+  -- -----------------------------------------------------------------------
+  ball_w_s     <= 1 when to_integer(unsigned(ball_w_i)) = 0
+                    else to_integer(unsigned(ball_w_i));
+  ball_h_s     <= 1 when to_integer(unsigned(ball_h_i)) = 0
+                    else to_integer(unsigned(ball_h_i));
+  ball_spd_h_s <= 1 when to_integer(unsigned(ball_spd_h)) = 0
+                    else to_integer(unsigned(ball_spd_h));
+  ball_spd_v_s <= 1 when to_integer(unsigned(ball_spd_v)) = 0
+                    else to_integer(unsigned(ball_spd_v));
+  cross_h_s    <= 1 when to_integer(unsigned(cross_h_i)) = 0
+                    else to_integer(unsigned(cross_h_i));
+  cross_v_s    <= 1 when to_integer(unsigned(cross_v_i)) = 0
+                    else to_integer(unsigned(cross_v_i));
+
+  -- Centre cross: vertical centre column + horizontal centre row
+  centre_on <= '1' when screen_x = H_ACTIVE / 2 or screen_y = 288 else '0';
+
+  -- Crosshatch: pixel is on a grid line when either counter = 0
+  cross_on  <= '1' when cross_x_cnt = 0 or cross_y_cnt = 0 else '0';
 
   u_timing : entity work.pal_timing
     generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL, CLK_MHZ => CLK_MHZ)
@@ -375,16 +420,16 @@ begin
       if rst = '1' then
         ball_x  <= 0;
         ball_y  <= 0;
-        ball_vx <= 3;
-        ball_vy <= 2;
+        ball_vx <= ball_spd_h_s;
+        ball_vy <= ball_spd_v_s;
       elsif ce_s = '1' and v_cnt = V_ACT_E_F2 and h_cnt = H_TOTAL - 1 then
         nx  := ball_x + ball_vx;
         ny  := ball_y + ball_vy;
         nvx := ball_vx;
         nvy := ball_vy;
         -- Right wall
-        if nx > H_ACTIVE - BALL_W then
-          nx  := 2 * (H_ACTIVE - BALL_W) - nx;
+        if nx > H_ACTIVE - ball_w_s then
+          nx  := 2 * (H_ACTIVE - ball_w_s) - nx;
           nvx := -nvx;
         end if;
         -- Left wall
@@ -393,8 +438,8 @@ begin
           nvx := -nvx;
         end if;
         -- Bottom wall
-        if ny > 576 - BALL_H then
-          ny  := 2 * (576 - BALL_H) - ny;
+        if ny > 576 - ball_h_s then
+          ny  := 2 * (576 - ball_h_s) - ny;
           nvy := -nvy;
         end if;
         -- Top wall
@@ -412,9 +457,9 @@ begin
 
   -- '1' when the current pixel lies inside the ball rectangle
   ball_on <= '1' when screen_x >= ball_x and
-                      screen_x <  ball_x + BALL_W and
+                      screen_x <  ball_x + ball_w_s and
                       screen_y >= ball_y and
-                      screen_y <  ball_y + BALL_H
+                      screen_y <  ball_y + ball_h_s
              else '0';
 
 
@@ -512,6 +557,51 @@ begin
   end process;
 
   -- -----------------------------------------------------------------------
+  -- Crosshatch counters (sel = 8)
+  --   cross_x_cnt : 0..cross_h_s-1; resets at start of each active line
+  --   cross_y_cnt : 0..cross_v_s-1; resets at start of each frame, counts active lines
+  -- -----------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        cross_x_cnt <= 0;
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and in_any_active then
+          cross_x_cnt <= 0;               -- reset at line start
+        elsif active_s = '1' then
+          if cross_x_cnt = cross_h_s - 1 then
+            cross_x_cnt <= 0;
+          else
+            cross_x_cnt <= cross_x_cnt + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        cross_y_cnt <= 0;
+      elsif ce_s = '1' then
+        -- Reset V counter at the cycle before the very first active line of F1
+        if v_cnt = V_ACT_S_F1 and h_cnt = 0 then
+          cross_y_cnt <= 0;
+        -- Advance once per active line (end-of-line pulse)
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          if cross_y_cnt = cross_v_s - 1 then
+            cross_y_cnt <= 0;
+          else
+            cross_y_cnt <= cross_y_cnt + 1;
+          end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -----------------------------------------------------------------------
   -- Active-level mux and DAC output
   -- -----------------------------------------------------------------------
   with ZONE_TABLE(zone_idx_v) select
@@ -520,8 +610,14 @@ begin
     color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
 
   active_level <= bram_level when sel_i = 4 else
-                  white_s    when sel_i = 5 and ball_on  = '1' else
+                  white_s    when sel_i = 5 and ball_on   = '1' else
                   black_s    when sel_i = 5 else
+                  white_s    when sel_i = 6 else                        -- full white
+                  black_s    when sel_i = 7 else                        -- full black
+                  white_s    when sel_i = 8 and cross_on  = '1' else   -- crosshatch
+                  black_s    when sel_i = 8 else
+                  white_s    when sel_i = 9 and centre_on = '1' else   -- centre cross
+                  black_s    when sel_i = 9 else
                   grad_x_s   when sel_i = 2 else
                   grad_y_s   when sel_i = 3 else
                   white_s    when (sel_i = 0 and color_v = '1') or
