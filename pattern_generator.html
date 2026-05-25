@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pattern Generator</title>
+<style>
+:root {
+  --bg-deep:   #0c0c18;
+  --bg-dark:   #13131f;
+  --bg-mid:    #1a1a2e;
+  --bg-panel:  #1e2540;
+  --bg-hover:  #252d47;
+  --accent:    #5b8ef8;
+  --accent2:   #9b5cf6;
+  --border:    #2a3350;
+  --text:      #dde3f0;
+  --muted:     #7b8aab;
+  --green:     #22c55e;
+  --red:       #f04444;
+  --orange:    #f59e0b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  background: var(--bg-deep);
+  color: var(--text);
+  display: flex;
+  height: 100vh;
+}
+
+/* ═══ SIDEBAR ═══ */
+.sidebar {
+  width: 270px; min-width: 270px;
+  background: var(--bg-dark);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 14px 16px;
+  background: var(--bg-mid);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 9px;
+  font-size: 14px; font-weight: 700; letter-spacing: .4px;
+  flex-shrink: 0;
+}
+.sidebar-head svg { color: var(--accent); flex-shrink: 0; }
+.sidebar-body {
+  flex: 1; overflow-y: auto; padding: 14px 14px 20px;
+}
+.sidebar-body::-webkit-scrollbar { width: 4px; }
+.sidebar-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* ═══ SECTIONS ═══ */
+.sec { margin-bottom: 18px; }
+.sec-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.4px; color: var(--muted);
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ═══ FIELDS ═══ */
+.field { margin-bottom: 11px; }
+.field label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11px; color: var(--muted); margin-bottom: 5px;
+}
+.field label .val { color: var(--accent); font-family: monospace; font-size: 11px; }
+select, input[type=text], input[type=number] {
+  width: 100%; background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 7px 9px;
+  font-size: 12px; font-family: inherit; outline: none;
+  transition: border-color .18s;
+}
+select:focus, input[type=text]:focus { border-color: var(--accent); }
+select { cursor: pointer; }
+
+input[type=range] {
+  width: 100%; height: 4px; appearance: none;
+  background: var(--border); border-radius: 4px;
+  cursor: pointer; border: none; outline: none; padding: 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+  border: 2px solid var(--bg-dark);
+}
+input[type=color] {
+  width: 100%; height: 34px; padding: 3px 4px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg-panel); cursor: pointer;
+}
+.row2 { display: flex; gap: 8px; }
+.row2 .field { flex: 1; }
+
+/* ═══ BUTTONS ═══ */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 13px; border: none; border-radius: 7px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: filter .15s, transform .1s; font-family: inherit;
+  white-space: nowrap;
+}
+.btn:active { transform: scale(.97); }
+.btn-primary  { background: var(--accent);  color: #fff; }
+.btn-primary:hover  { filter: brightness(1.15); }
+.btn-green    { background: var(--green);   color: #fff; }
+.btn-green:hover    { filter: brightness(1.15); }
+.btn-ghost    { background: var(--bg-panel); color: var(--text); border: 1px solid var(--border); }
+.btn-ghost:hover    { border-color: var(--accent); color: var(--accent); }
+.btn-red      { background: var(--red);     color: #fff; padding: 5px 8px; font-size: 11px; }
+.btn-red:hover      { filter: brightness(1.15); }
+.btn-orange   { background: var(--orange);  color: #111; }
+.btn-orange:hover   { filter: brightness(1.1); }
+.btn-full { width: 100%; justify-content: center; }
+
+/* ═══ TEMPLATE LIST ═══ */
+.tmpl-save-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.tmpl-save-row input { flex: 1; }
+.tmpl-list { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; }
+.tmpl-list::-webkit-scrollbar { width: 3px; }
+.tmpl-list::-webkit-scrollbar-thumb { background: var(--border); }
+.tmpl-item {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 7px; padding: 8px 10px; transition: border-color .15s;
+}
+.tmpl-item:hover { border-color: var(--accent); }
+.tmpl-click { flex: 1; cursor: pointer; min-width: 0; }
+.tmpl-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmpl-meta { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.no-tmpl { color: var(--muted); text-align: center; padding: 14px 0; font-size: 11px; }
+
+/* ═══ MAIN AREA ═══ */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.toolbar {
+  padding: 10px 18px;
+  background: var(--bg-dark); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.toolbar-title { flex: 1; font-size: 13px; font-weight: 600; }
+.toolbar-title span { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+.canvas-wrap {
+  flex: 1; overflow: auto; display: flex;
+  align-items: center; justify-content: center;
+  padding: 24px;
+  background-color: #090910;
+  background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+#patternCanvas {
+  display: block;
+  box-shadow: 0 0 0 1px var(--border), 0 12px 48px rgba(0,0,0,.7);
+  border-radius: 3px;
+  max-width: 100%; max-height: 100%;
+  image-rendering: pixelated;
+}
+
+/* ═══ MODAL ═══ */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.65); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: var(--bg-mid); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px 26px; width: 360px;
+  box-shadow: 0 24px 64px rgba(0,0,0,.7);
+}
+.modal-box h3 { font-size: 15px; margin-bottom: 6px; }
+.modal-box p  { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+.modal-box input { margin-bottom: 10px; }
+.modal-hint {
+  font-size: 11px; color: var(--muted); margin-bottom: 18px;
+  background: var(--bg-panel); border-radius: 6px; padding: 8px 10px;
+  line-height: 1.6;
+}
+.modal-hint code { color: var(--accent); font-family: monospace; }
+.modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ═══ RANDOMISE COLOUR ROW ═══ */
+.colour-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.colour-row-head .sec-title { margin-bottom: 0; border: none; padding: 0; }
+
+/* small tag/badge */
+.badge {
+  font-size: 10px; font-weight: 600; padding: 2px 7px;
+  border-radius: 20px; background: var(--bg-panel);
+  color: var(--muted); border: 1px solid var(--border);
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<div class="sidebar">
+  <div class="sidebar-head">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+    </svg>
+    Pattern Generator
+  </div>
+  <div class="sidebar-body">
+
+    <!-- Pattern type -->
+    <div class="sec">
+      <div class="sec-title">Pattern</div>
+      <div class="field">
+        <label>Type</label>
+        <select id="patternType" onchange="onTypeChange()">
+          <option value="checkerboard">Checkerboard</option>
+          <option value="hstripes">Horizontal Stripes</option>
+          <option value="vstripes">Vertical Stripes</option>
+          <option value="dstripes">Diagonal Stripes</option>
+          <option value="dots">Polka Dots</option>
+          <option value="grid">Grid / Crosshatch</option>
+          <option value="zigzag">Zigzag</option>
+          <option value="diamond">Diamond</option>
+          <option value="hexagons">Hexagons</option>
+          <option value="waves">Waves</option>
+          <option value="brick">Brick</option>
+          <option value="triangles">Triangles</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Colours -->
+    <div class="sec">
+      <div class="colour-row-head">
+        <div class="sec-title">Colours</div>
+        <button class="btn btn-ghost" style="padding:4px 9px;font-size:10px" onclick="randomiseColors()" title="Randomise">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
+            <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
+          </svg>Shuffle
+        </button>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Background</label>
+          <input type="color" id="color1" value="#1a1a2e" oninput="render()">
+        </div>
+        <div class="field">
+          <label>Foreground</label>
+          <input type="color" id="color2" value="#4f8ef7" oninput="render()">
+        </div>
+      </div>
+      <div class="field" id="color3Field" style="display:none">
+        <label>Accent</label>
+        <input type="color" id="color3" value="#9b5cf6" oninput="render()">
+      </div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="sec">
+      <div class="sec-title">Parameters</div>
+      <div class="field" id="sizeField">
+        <label>Cell Size <span class="val" id="sizeVal">32 px</span></label>
+        <input type="range" id="cellSize" min="4" max="120" value="32"
+               oninput="sv('sizeVal',this.value,' px');render()">
+      </div>
+      <div class="field" id="lineWidthField" style="display:none">
+        <label>Line Width <span class="val" id="lwVal">2 px</span></label>
+        <input type="range" id="lineWidth" min="1" max="40" value="2"
+               oninput="sv('lwVal',this.value,' px');render()">
+      </div>
+      <div class="field" id="angleField" style="display:none">
+        <label>Angle <span class="val" id="angVal">45°</span></label>
+        <input type="range" id="angle" min="1" max="89" value="45"
+               oninput="sv('angVal',this.value,'°');render()">
+      </div>
+      <div class="field" id="gapField" style="display:none">
+        <label>Dot Gap <span class="val" id="gapVal">8 px</span></label>
+        <input type="range" id="gap" min="0" max="60" value="8"
+               oninput="sv('gapVal',this.value,' px');render()">
+      </div>
+      <div class="field" id="amplField" style="display:none">
+        <label>Amplitude <span class="val" id="amplVal">12 px</span></label>
+        <input type="range" id="ampl" min="2" max="80" value="12"
+               oninput="sv('amplVal',this.value,' px');render()">
+      </div>
+      <div class="field" id="roundField" style="display:none">
+        <label>Corner Radius <span class="val" id="roundVal">4 px</span></label>
+        <input type="range" id="roundness" min="0" max="30" value="4"
+               oninput="sv('roundVal',this.value,' px');render()">
+      </div>
+    </div>
+
+    <!-- Output size -->
+    <div class="sec">
+      <div class="sec-title">Output Size</div>
+      <div class="row2">
+        <div class="field">
+          <label>Width</label>
+          <select id="canvasW" onchange="resizeCanvas()">
+            <option value="512">512</option>
+            <option value="640">640</option>
+            <option value="768">768</option>
+            <option value="1024" selected>1024</option>
+            <option value="1280">1280</option>
+            <option value="1920">1920</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Height</label>
+          <select id="canvasH" onchange="resizeCanvas()">
+            <option value="512">512</option>
+            <option value="640">640</option>
+            <option value="768">768</option>
+            <option value="1024" selected>1024</option>
+            <option value="1280">1280</option>
+            <option value="1920">1920</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Templates -->
+    <div class="sec">
+      <div class="sec-title">Templates</div>
+      <div class="tmpl-save-row">
+        <input type="text" id="tmplName" placeholder="Template name…"
+               onkeydown="if(event.key==='Enter')saveTemplate()">
+        <button class="btn btn-primary" onclick="saveTemplate()">Save</button>
+      </div>
+      <div class="tmpl-list" id="tmplList"></div>
+    </div>
+
+  </div><!-- /sidebar-body -->
+</div><!-- /sidebar -->
+
+<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<div class="main">
+  <div class="toolbar">
+    <span class="toolbar-title" id="toolbarTitle">
+      Checkerboard <span>— 1024 × 1024</span>
+    </span>
+    <button class="btn btn-ghost" onclick="render()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="23 4 23 10 17 10"/>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>Refresh
+    </button>
+    <button class="btn btn-green" onclick="openSaveModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>Save PNG
+    </button>
+  </div>
+  <div class="canvas-wrap">
+    <canvas id="patternCanvas" width="1024" height="1024"></canvas>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ SAVE MODAL ═══════════════════════════════ -->
+<div class="modal-backdrop" id="saveModal" style="display:none" onclick="closeSaveModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>💾 Save as PNG</h3>
+    <p>Enter a filename (timestamp is always appended):</p>
+    <input type="text" id="saveFilename" placeholder="e.g. my-pattern"
+           onkeydown="if(event.key==='Enter')confirmSave();if(event.key==='Escape')closeSaveModal()">
+    <div class="modal-hint" id="modalHint"></div>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeSaveModal()">Cancel</button>
+      <button class="btn btn-green" onclick="confirmSave()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>Download
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ─── Canvas & context ───────────────────────────────────────────────────────
+const canvas = document.getElementById('patternCanvas');
+const ctx    = canvas.getContext('2d');
+
+// ─── Tiny helpers ────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const sv = (id, v, sfx='') => $(id).textContent = v + sfx;
+
+function show(id, visible) {
+  $(id).style.display = visible ? '' : 'none';
+}
+
+function getTimestamp() {
+  const n = new Date();
+  const p = v => String(v).padStart(2,'0');
+  return `${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}_${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}`;
+}
+
+function hex(r,g,b) {
+  return '#' + [r,g,b].map(v => Math.min(255,Math.max(0,v|0)).toString(16).padStart(2,'0')).join('');
+}
+function randByte()  { return (Math.random()*256)|0; }
+function randColor() { return hex(randByte(),randByte(),randByte()); }
+
+// ─── Read all control values ──────────────────────────────────────────────
+function getSettings() {
+  return {
+    type:      $('patternType').value,
+    color1:    $('color1').value,
+    color2:    $('color2').value,
+    color3:    $('color3').value,
+    cellSize:  +$('cellSize').value,
+    lineWidth: +$('lineWidth').value,
+    angle:     +$('angle').value,
+    gap:       +$('gap').value,
+    ampl:      +$('ampl').value,
+    roundness: +$('roundness').value,
+    canvasW:   +$('canvasW').value,
+    canvasH:   +$('canvasH').value,
+  };
+}
+
+// ─── Apply settings back to controls ─────────────────────────────────────
+function applySettings(s) {
+  $('patternType').value  = s.type;
+  $('color1').value       = s.color1 || '#1a1a2e';
+  $('color2').value       = s.color2 || '#4f8ef7';
+  $('color3').value       = s.color3 || '#9b5cf6';
+  $('cellSize').value     = s.cellSize  ?? 32;
+  $('lineWidth').value    = s.lineWidth ?? 2;
+  $('angle').value        = s.angle     ?? 45;
+  $('gap').value          = s.gap       ?? 8;
+  $('ampl').value         = s.ampl      ?? 12;
+  $('roundness').value    = s.roundness ?? 4;
+  $('canvasW').value      = s.canvasW   ?? 1024;
+  $('canvasH').value      = s.canvasH   ?? 1024;
+  sv('sizeVal',  s.cellSize  ?? 32,  ' px');
+  sv('lwVal',    s.lineWidth ?? 2,   ' px');
+  sv('angVal',   s.angle     ?? 45,  '°');
+  sv('gapVal',   s.gap       ?? 8,   ' px');
+  sv('amplVal',  s.ampl      ?? 12,  ' px');
+  sv('roundVal', s.roundness ?? 4,   ' px');
+  resizeCanvas();   // also calls onTypeChange → render
+}
+
+// ─── Show/hide controls per pattern ──────────────────────────────────────
+function onTypeChange() {
+  const t = $('patternType').value;
+  const needLW    = ['hstripes','vstripes','dstripes','grid','waves'].includes(t);
+  const needAngle = t === 'dstripes';
+  const needGap   = ['dots','grid'].includes(t);
+  const needAmpl  = ['waves','zigzag'].includes(t);
+  const needRound = ['brick','dots'].includes(t);
+  const needC3    = ['triangles','hexagons'].includes(t);
+
+  show('lineWidthField', needLW);
+  show('angleField',     needAngle);
+  show('gapField',       needGap);
+  show('amplField',      needAmpl);
+  show('roundField',     needRound);
+  show('color3Field',    needC3);
+  render();
+}
+
+// ─── Canvas resize ───────────────────────────────────────────────────────
+function resizeCanvas() {
+  canvas.width  = +$('canvasW').value;
+  canvas.height = +$('canvasH').value;
+  onTypeChange();   // refreshes visibility flags + render
+}
+
+// ─── Randomise colours ───────────────────────────────────────────────────
+function randomiseColors() {
+  $('color1').value = randColor();
+  $('color2').value = randColor();
+  $('color3').value = randColor();
+  render();
+}
+
+// ─── Save PNG modal ──────────────────────────────────────────────────────
+function openSaveModal() {
+  $('saveFilename').value = '';
+  updateModalHint('');
+  $('saveModal').style.display = 'flex';
+  setTimeout(() => $('saveFilename').focus(), 50);
+  $('saveFilename').oninput = () => updateModalHint($('saveFilename').value);
+}
+function closeSaveModal() {
+  $('saveModal').style.display = 'none';
+}
+function updateModalHint(raw) {
+  const ts   = getTimestamp();
+  const name = raw.trim() ? `${raw.trim()}_${ts}.png` : `${ts}.png`;
+  $('modalHint').innerHTML =
+    `File will be saved as:<br><code>${name}</code>`;
+}
+function confirmSave() {
+  const raw  = $('saveFilename').value;
+  const ts   = getTimestamp();
+  const name = raw.trim() ? `${raw.trim()}_${ts}.png` : `${ts}.png`;
+  const a    = document.createElement('a');
+  a.href     = canvas.toDataURL('image/png');
+  a.download = name;
+  a.click();
+  closeSaveModal();
+}
+
+// ─── Templates (localStorage) ────────────────────────────────────────────
+const LS_KEY = 'patgen_v1_templates';
+
+function loadTemplates()   { try { return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); } catch { return []; } }
+function storeTemplates(a) { localStorage.setItem(LS_KEY, JSON.stringify(a)); }
+
+function saveTemplate() {
+  const name = $('tmplName').value.trim();
+  if (!name) { $('tmplName').focus(); return; }
+  const list = loadTemplates();
+  const idx  = list.findIndex(t => t.name === name);
+  const entry = { name, ts: getTimestamp(), settings: getSettings() };
+  if (idx >= 0) list[idx] = entry; else list.push(entry);
+  storeTemplates(list);
+  $('tmplName').value = '';
+  renderTmplList();
+}
+
+function deleteTemplate(name) {
+  storeTemplates(loadTemplates().filter(t => t.name !== name));
+  renderTmplList();
+}
+
+function loadTemplate(name) {
+  const t = loadTemplates().find(t => t.name === name);
+  if (t) applySettings(t.settings);
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function renderTmplList() {
+  const list = loadTemplates();
+  const el   = $('tmplList');
+  if (!list.length) {
+    el.innerHTML = '<div class="no-tmpl">No saved templates yet</div>';
+    return;
+  }
+  el.innerHTML = list.map(t => `
+    <div class="tmpl-item">
+      <div class="tmpl-click" onclick="loadTemplate('${esc(t.name)}')">
+        <div class="tmpl-name">${esc(t.name)}</div>
+        <div class="tmpl-meta">${esc(t.settings.type)} &bull; ${t.settings.canvasW}&times;${t.settings.canvasH} &bull; ${t.ts}</div>
+      </div>
+      <button class="btn btn-red" onclick="deleteTemplate('${esc(t.name)}')" title="Delete">✕</button>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PATTERN RENDERERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function render() {
+  const s  = getSettings();
+  const W  = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const typeName = $('patternType').options[$('patternType').selectedIndex].text;
+  $('toolbarTitle').innerHTML = `${typeName} <span>— ${W} × ${H}</span>`;
+
+  ({
+    checkerboard, hstripes, vstripes, dstripes, dots,
+    grid, zigzag, diamond, hexagons, waves, brick, triangles
+  }[s.type] || checkerboard)(W, H, s);
+}
+
+// ── 1. Checkerboard ────────────────────────────────────────────────────────
+function checkerboard(W, H, s) {
+  const sz = s.cellSize;
+  const cols = Math.ceil(W/sz)+1, rows = Math.ceil(H/sz)+1;
+  for (let r=0; r<rows; r++) {
+    for (let c=0; c<cols; c++) {
+      ctx.fillStyle = (r+c)%2===0 ? s.color1 : s.color2;
+      ctx.fillRect(c*sz, r*sz, sz, sz);
+    }
+  }
+}
+
+// ── 2. Horizontal stripes ─────────────────────────────────────────────────
+function hstripes(W, H, s) {
+  const sz = s.cellSize, lw = s.lineWidth;
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = s.color2;
+  for (let y=0; y<H+sz; y+=sz) ctx.fillRect(0, y, W, lw);
+}
+
+// ── 3. Vertical stripes ───────────────────────────────────────────────────
+function vstripes(W, H, s) {
+  const sz = s.cellSize, lw = s.lineWidth;
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = s.color2;
+  for (let x=0; x<W+sz; x+=sz) ctx.fillRect(x, 0, lw, H);
+}
+
+// ── 4. Diagonal stripes ───────────────────────────────────────────────────
+function dstripes(W, H, s) {
+  const sz  = s.cellSize, lw = s.lineWidth;
+  const ang = (s.angle * Math.PI) / 180;
+  const diag = Math.hypot(W, H) + sz*2;
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.rotate(ang);
+  ctx.strokeStyle = s.color2;
+  ctx.lineWidth   = lw;
+  ctx.beginPath();
+  for (let x=-diag; x<diag; x+=sz) {
+    ctx.moveTo(x, -diag); ctx.lineTo(x, diag);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── 5. Polka dots ─────────────────────────────────────────────────────────
+function dots(W, H, s) {
+  const sz  = s.cellSize, gap = s.gap, rnd = s.roundness;
+  const r   = Math.max(1, (sz - gap) / 2);
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = s.color2;
+  for (let y=sz/2-sz; y<H+sz; y+=sz) {
+    for (let x=sz/2-sz; x<W+sz; x+=sz) {
+      if (rnd >= r) {
+        // circle
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+      } else {
+        // rounded rect
+        const d = rnd;
+        ctx.beginPath();
+        ctx.moveTo(x-r+d, y-r);
+        ctx.arcTo (x+r, y-r, x+r, y+r, d);
+        ctx.arcTo (x+r, y+r, x-r, y+r, d);
+        ctx.arcTo (x-r, y+r, x-r, y-r, d);
+        ctx.arcTo (x-r, y-r, x+r, y-r, d);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+  }
+}
+
+// ── 6. Grid / Crosshatch ──────────────────────────────────────────────────
+function grid(W, H, s) {
+  const sz = s.cellSize, lw = s.lineWidth, gap = s.gap;
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = s.color2; ctx.lineWidth = lw;
+  ctx.beginPath();
+  for (let y=gap; y<=H; y+=sz) { ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  for (let x=gap; x<=W; x+=sz) { ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  ctx.stroke();
+}
+
+// ── 7. Zigzag ─────────────────────────────────────────────────────────────
+function zigzag(W, H, s) {
+  const sz  = s.cellSize;
+  const amp = s.ampl;
+  const lw  = Math.max(1, sz * 0.12);
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = s.color2;
+  ctx.lineWidth   = lw;
+  ctx.lineJoin    = 'round';
+  for (let y=-sz; y<H+sz*2; y+=sz) {
+    ctx.beginPath();
+    let up = true;
+    for (let x=-amp*2; x<=W+amp*2; x+=amp) {
+      const py = up ? y : y + sz/2;
+      x === -amp*2 ? ctx.moveTo(x,py) : ctx.lineTo(x,py);
+      up = !up;
+    }
+    ctx.stroke();
+  }
+}
+
+// ── 8. Diamond ────────────────────────────────────────────────────────────
+function diamond(W, H, s) {
+  const sz   = s.cellSize;
+  const diag = Math.hypot(W, H) + sz*2;
+  ctx.save();
+  ctx.translate(W/2, H/2);
+  ctx.rotate(Math.PI/4);
+  const cPerSide = Math.ceil(diag/sz)+2;
+  for (let r=-cPerSide; r<cPerSide; r++) {
+    for (let c=-cPerSide; c<cPerSide; c++) {
+      ctx.fillStyle = (r+c)%2===0 ? s.color1 : s.color2;
+      ctx.fillRect(c*sz, r*sz, sz, sz);
+    }
+  }
+  ctx.restore();
+}
+
+// ── 9. Hexagons ───────────────────────────────────────────────────────────
+function hexagons(W, H, s) {
+  const sz  = s.cellSize;
+  const r   = sz / 2;
+  const rh  = r * Math.sqrt(3);        // row height
+  const cw  = sz * 1.5;                // col stride
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+
+  function hexPath(cx, cy) {
+    ctx.beginPath();
+    for (let i=0; i<6; i++) {
+      const a = (Math.PI/3)*i - Math.PI/6;
+      i===0 ? ctx.moveTo(cx+r*Math.cos(a), cy+r*Math.sin(a))
+             : ctx.lineTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
+    }
+    ctx.closePath();
+  }
+
+  const cols = Math.ceil(W/cw)+3, rows = Math.ceil(H/rh)+3;
+  for (let col=-1; col<cols; col++) {
+    for (let row=-1; row<rows; row++) {
+      const cx = col*cw;
+      const cy = row*rh + (col%2===0 ? 0 : rh/2);
+      hexPath(cx, cy);
+      ctx.fillStyle = (row+col)%3===0 ? s.color3 : s.color2;
+      ctx.fill();
+      ctx.strokeStyle = s.color1;
+      ctx.lineWidth   = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+// ── 10. Waves ─────────────────────────────────────────────────────────────
+function waves(W, H, s) {
+  const sz   = s.cellSize, amp = s.ampl, lw = s.lineWidth;
+  const freq = (2*Math.PI) / sz;
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = s.color2;
+  ctx.lineWidth   = lw;
+  ctx.lineJoin    = 'round';
+  for (let y=-sz; y<H+sz*2; y+=sz) {
+    ctx.beginPath();
+    for (let x=0; x<=W; x+=2) {
+      const py = y + amp * Math.sin(freq * x);
+      x===0 ? ctx.moveTo(x,py) : ctx.lineTo(x,py);
+    }
+    ctx.stroke();
+  }
+}
+
+// ── 11. Brick ─────────────────────────────────────────────────────────────
+function brick(W, H, s) {
+  const bw  = s.cellSize * 2;
+  const bh  = s.cellSize;
+  const rnd = s.roundness;
+  const lw  = Math.max(1, Math.round(bh * 0.08));
+  ctx.fillStyle = s.color2; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = s.color1;
+  const rows = Math.ceil(H/bh)+2;
+  for (let row=-1; row<rows; row++) {
+    const off = (row%2)*( bw/2);
+    for (let x=-bw+off; x<W+bw; x+=bw) {
+      const rx=x+lw, ry=row*bh+lw, rw=bw-lw*2, rh2=bh-lw*2;
+      if (rnd > 0) {
+        const r = Math.min(rnd, rw/2, rh2/2);
+        ctx.beginPath();
+        ctx.moveTo(rx+r, ry);
+        ctx.arcTo(rx+rw, ry,    rx+rw, ry+rh2, r);
+        ctx.arcTo(rx+rw, ry+rh2, rx,   ry+rh2, r);
+        ctx.arcTo(rx,    ry+rh2, rx,   ry,      r);
+        ctx.arcTo(rx,    ry,     rx+rw, ry,      r);
+        ctx.closePath(); ctx.fill();
+      } else {
+        ctx.fillRect(rx, ry, rw, rh2);
+      }
+    }
+  }
+}
+
+// ── 12. Triangles ─────────────────────────────────────────────────────────
+function triangles(W, H, s) {
+  const sz   = s.cellSize;
+  const cols = Math.ceil(W/sz)+2, rows = Math.ceil(H/sz)+2;
+  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
+  for (let row=-1; row<rows; row++) {
+    for (let col=-1; col<cols; col++) {
+      const x = col*sz, y = row*sz;
+      const flip = (row+col)%2===0;
+      ctx.fillStyle = (row+col)%3===0 ? s.color3 : s.color2;
+      ctx.beginPath();
+      if (flip) {
+        ctx.moveTo(x,      y+sz);
+        ctx.lineTo(x+sz/2, y);
+        ctx.lineTo(x+sz,   y+sz);
+      } else {
+        ctx.moveTo(x,      y);
+        ctx.lineTo(x+sz/2, y+sz);
+        ctx.lineTo(x+sz,   y);
+      }
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+renderTmplList();
+onTypeChange();   // triggers render
+
+// Update modal hint live while typing
+$('saveFilename').addEventListener('input', () => updateModalHint($('saveFilename').value));
+
+// Auto-update hint on open
+function openSaveModal() {
+  $('saveFilename').value = '';
+  updateModalHint('');
+  $('saveModal').style.display = 'flex';
+  setTimeout(() => $('saveFilename').focus(), 40);
+}
+</script>
+</body>
+</html>
