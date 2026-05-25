@@ -492,8 +492,24 @@ begin
   bram_rd_sum  <= bram_rd_line_base + bram_px_cnt;
   bram_rd_addr <= bram_rd_sum when bram_rd_sum < bram_len_i else 0;
 
-  bram_pixel <= bram_mem_0(bram_rd_addr) when disp_buf = '0' else
-                bram_mem_1(bram_rd_addr);
+  -- Synchronous BRAM read -- REQUIRED for block RAM inference.
+  -- Vivado cannot map asynchronous (combinational) reads to RAMB36/RAMB18;
+  -- without this the tool falls back to distributed RAM (RAMD64E/LUT-RAM)
+  -- which exhausts LUT resources on any device for a 300 Kbit buffer.
+  -- The registered output introduces a 1-pixel pipeline delay (imperceptible).
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if ce_s = '1' then
+        if disp_buf = '0' then
+          bram_pixel <= bram_mem_0(bram_rd_addr);
+        else
+          bram_pixel <= bram_mem_1(bram_rd_addr);
+        end if;
+      end if;
+    end if;
+  end process;
+
   bram_level <= white_s when bram_pixel = '1' else black_s;
 
   buf_swapped <= buf_swapped_s;
