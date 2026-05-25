@@ -2,128 +2,137 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
--- PAL B&W BRAM Video IP (interlaced PAL, 625 lines, 50 Hz field rate)
+-- PAL B&W BRAM Video IP  --  interlaced OR progressive  (V1.2)
+-- =============================================================
 --
--- Extends pal_tv_interlaced_top with a fifth pattern source (sel = 4):
--- pixels are read from an internal 1-bit BRAM written by the host.
+-- Revision history
+--   V1.0 : PAL interlaced BRAM IP (625/50, interlaced composite sync)
+--   V1.1 : Added standalone boolean FIFO (pal_fifo_bool, no BRAM link)
+--   V1.2 : PROGRESSIVE generic -- same entity drives CRT (interlaced)
+--          and progressive displays with a single generic switch.
 --
--- sel 0  Vertical bars        (8 zones, STRIPE/WHITE/...)
--- sel 1  Horizontal bars      (8 zones per field)
+-- Generic PROGRESSIVE (default false = interlaced, backward compatible):
+--
+--   false : PAL 625/50 interlaced -- CRT TV, composite/SCART.
+--           Two fields per frame; F1 (even rows) then F2 (odd rows).
+--           Full PAL equalising-pulse composite sync via pal_csync_il.
+--
+--   true  : Progressive 576p-style (625 lines / 50 Hz, single sweep).
+--           All 576 active rows in one continuous top-to-bottom pass.
+--           Broad-pulse composite sync via pal_csync_prog.
+--           Suitable for: PC monitors (RGBS/SCART), frame-grabbers.
+--
+-- BRAM pixel layout -- IDENTICAL for both modes (host write unchanged):
+--   Write image rows 0, 1, 2 ... 575 sequentially into the back buffer.
+--   The hardware routes each row to the correct field (interlaced) or
+--   line (progressive) automatically via the address stride.
+--
+--   Interlaced stride: bram_rd_line_base advances by 2*H_ACTIVE per line.
+--     F1 reads rows 0,2,4,...  F2 reads rows 1,3,5,...
+--
+--   Progressive stride: bram_rd_line_base advances by H_ACTIVE per line.
+--     Rows read sequentially: 0,1,2,...,575 in one sweep.
+--
+-- sel 0  Vertical bars
+-- sel 1  Horizontal bars
 -- sel 2  Horizontal gradient  (10 grey steps)
 -- sel 3  Vertical gradient    (10 grey steps)
--- sel 4  BRAM pixel source    (Boolean: 0 = black_lvl, 1 = brightness)
--- sel 5  Bouncing ball        (white rectangle on black background; size/speed via ports)
--- sel 6  Full white           (peak-white screen — DAC calibration)
--- sel 7  Full black           (black-burst screen — DAC calibration)
--- sel 8  Crosshatch grid      (H+V grid lines; spacing controlled via cross_h_i/cross_v_i)
--- sel 9  Centre cross         (single H + single V centre line)
---
--- BRAM write port (host side, independent of pixel clock):
---   bram_wr_en   pulse '1' for one clock to write one pixel
---   bram_wr_addr address (0 .. BRAM_DEPTH-1), 19-bit
---   bram_wr_data 1-bit pixel value
---
--- bram_len (runtime input):
---   Number of valid pixels stored in BRAM.  The read address wraps at this boundary.
---   bram_len = 520    one row, repeated on every active line (simple test card)
---   bram_len = 1040   two rows (one row-pair), repeated every row-pair
---   bram_len = 299520 full frame  (520 * 576 = all 576 image rows)
---
--- Double-buffering (sel = 4):
---   Two BRAM banks (0 and 1).  One bank is displayed; the other is the back
---   buffer available for host writes.
---   buf_swap     pulse '1' for one clock to request a buffer swap.  The swap
---                is deferred to the first V-blank boundary (end of F2 active)
---                so the display never tears.
---   buf_swapped  strobes '1' for one clock when the swap completes.
---   back_buf_o   combinational: current back-buffer index (0 or 1).
---                Always write to this buffer; it is the one NOT being displayed.
---
--- BRAM address layout (sel = 4) — natural sequential row order:
---   Write image rows 0, 1, 2, … 575 into BRAM sequentially;
---   the hardware automatically routes each row to the correct interlaced field.
---
---   addr       0 ..     519   image row  0  (F1 line 0,  screen row  0)
---   addr     520 ..    1039   image row  1  (F2 line 0,  screen row  1)
---   addr    1040 ..    1559   image row  2  (F1 line 1,  screen row  2)
---   addr    1560 ..    2079   image row  3  (F2 line 1,  screen row  3)
---   ...
---   addr k*1040      .. k*1040+519   image row 2k   (F1 line k, screen row 2k)
---   addr k*1040+520  .. k*1040+1039  image row 2k+1 (F2 line k, screen row 2k+1)
---   ...
---   addr 299000 .. 299519  image row 575 (F2 line 287, screen row 575)
---
--- Address generator: bram_rd_line_base + bram_px_cnt.
---   bram_rd_line_base advances by 2*H_ACTIVE after each active line (interlace stride).
---   F2 field starts with bram_rd_line_base = H_ACTIVE (image row 1).
---
--- Xilinx BRAM inference:
---   The bram_mem signal carries a "ram_style = block" attribute so Vivado
---   infers Block RAM.  BRAM_DEPTH = 299520 needs ~10 x BRAM36 on Artix-7.
---   Set BRAM_DEPTH to a power-of-two for most efficient packing.
+-- sel 4  BRAM pixel source    (0=black_lvl, 1=brightness)
+-- sel 5  Bouncing ball
+-- sel 6  Full white
+-- sel 7  Full black
+-- sel 8  Crosshatch grid
+-- sel 9  Centre cross
+
 entity pal_tv_bram_top is
   generic (
-    H_FRONT    : integer := 16;
-    H_SYNC_W   : integer := 47;
-    H_BACK     : integer := 57;
-    H_ACTIVE   : integer := 520;
-    H_TOTAL    : integer := 640;
-    V_TOTAL    : integer := 625;
-    LEVEL_SYNC  : std_logic_vector(3 downto 0) := "0000";
-    LEVEL_BLANK : std_logic_vector(3 downto 0) := "0100";
-    LEVEL_WHITE : std_logic_vector(3 downto 0) := "1111";
-    CLK_MHZ     : integer := 40;
-    STRIPE_W    : integer := 4;
-    BRAM_DEPTH  : integer := 299520   -- 520 * 576; set to 524288 (2^19) for power-of-2
+    PROGRESSIVE  : boolean := false;   -- false=interlaced CRT, true=progressive
+    H_FRONT      : integer := 16;
+    H_SYNC_W     : integer := 47;
+    H_BACK       : integer := 57;
+    H_ACTIVE     : integer := 520;
+    H_TOTAL      : integer := 640;
+    V_TOTAL      : integer := 625;
+    LEVEL_SYNC   : std_logic_vector(3 downto 0) := "0000";
+    LEVEL_BLANK  : std_logic_vector(3 downto 0) := "0100";
+    LEVEL_WHITE  : std_logic_vector(3 downto 0) := "1111";
+    CLK_MHZ      : integer := 40;
+    STRIPE_W     : integer := 4;
+    BRAM_DEPTH   : integer := 299520
   );
   port (
     clk          : in  std_logic;
     rst          : in  std_logic;
     sel          : in  std_logic_vector(7 downto 0);
-    brightness   : in  std_logic_vector(3 downto 0) := "1111";  -- white level
-    black_lvl    : in  std_logic_vector(3 downto 0) := "0100";  -- black/floor level
-    -- BRAM write port (synchronous; write at any time, gated only by bram_wr_en)
+    brightness   : in  std_logic_vector(3 downto 0) := "1111";
+    black_lvl    : in  std_logic_vector(3 downto 0) := "0100";
     bram_wr_en   : in  std_logic                     := '0';
     bram_wr_addr : in  std_logic_vector(18 downto 0) := (others => '0');
     bram_wr_data : in  std_logic                     := '0';
-    -- Number of valid pixels in BRAM (address wraps here)
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
-    -- Double-buffer control (sel = 4)
-    buf_swap     : in  std_logic := '0';   -- pulse '1' to request swap at next V-blank
-    buf_swapped  : out std_logic;          -- strobes '1' for one clock when swap completes
-    back_buf_o   : out std_logic;          -- back (write) buffer index (0 or 1)
-    -- Ball animation control (sel = 5)
-    ball_spd_h   : in  std_logic_vector(3 downto 0) := "0011";   -- horiz speed 1–15 px/frame
-    ball_spd_v   : in  std_logic_vector(3 downto 0) := "0010";   -- vert  speed 1–15 rows/frame
-    ball_w_i     : in  std_logic_vector(9 downto 0) := "0000111100";  -- ball width  in px  (def 60)
-    ball_h_i     : in  std_logic_vector(9 downto 0) := "0000110010";  -- ball height in rows (def 50)
-    -- Crosshatch control (sel = 8)
-    cross_h_i    : in  std_logic_vector(9 downto 0) := "0000110100";  -- H grid spacing px  (def 52)
-    cross_v_i    : in  std_logic_vector(9 downto 0) := "0000111010";  -- V grid spacing rows(def 58)
-    -- Video outputs
-    dac_out       : out std_logic_vector(3 downto 0);
-    csync_o       : out std_logic;   -- composite sync (H+V merged; 1 = sync tip)
-    line_sync_o   : out std_logic;   -- H sync only  (1 during hsync, never during vsync)
-    frame_sync_o  : out std_logic;   -- V sync pulse (1 during vsync broad-sync region)
-    field_o       : out std_logic;   -- field indicator (0 = F1, 1 = F2)
-    active_o      : out std_logic;   -- 1 during active picture
-    blank_o       : out std_logic    -- composite blanking (1 outside active + not sync)
+    buf_swap     : in  std_logic := '0';
+    buf_swapped  : out std_logic;
+    back_buf_o   : out std_logic;
+    ball_spd_h   : in  std_logic_vector(3 downto 0) := "0011";
+    ball_spd_v   : in  std_logic_vector(3 downto 0) := "0010";
+    ball_w_i     : in  std_logic_vector(9 downto 0) := "0000111100";
+    ball_h_i     : in  std_logic_vector(9 downto 0) := "0000110010";
+    cross_h_i    : in  std_logic_vector(9 downto 0) := "0000110100";
+    cross_v_i    : in  std_logic_vector(9 downto 0) := "0000111010";
+    dac_out      : out std_logic_vector(3 downto 0);
+    csync_o      : out std_logic;
+    line_sync_o  : out std_logic;
+    frame_sync_o : out std_logic;
+    field_o      : out std_logic;
+    active_o     : out std_logic;
+    blank_o      : out std_logic
   );
 end entity pal_tv_bram_top;
 
 architecture rtl of pal_tv_bram_top is
 
+  -- -------------------------------------------------------------------------
+  -- Helper: pick one of two integers at elaboration based on a boolean.
+  -- Used because VHDL constant declarations do not support "when/else".
+  -- -------------------------------------------------------------------------
+  function sel_int(cond : boolean; t, f : integer) return integer is
+  begin
+    if cond then return t; else return f; end if;
+  end function;
+
   constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
 
+  -- -------------------------------------------------------------------------
+  -- Interlaced V timing  (PAL 625/50 two-field)
+  -- -------------------------------------------------------------------------
   constant V_ACT_S_F1 : integer := 24;
   constant V_ACT_E_F1 : integer := 311;
   constant V_ACT_S_F2 : integer := 336;
   constant V_ACT_E_F2 : integer := 623;
-  constant V_ACTIVE_F : integer := 288;
+
+  -- -------------------------------------------------------------------------
+  -- Progressive V timing  (576p-style, single sweep, 625-line frame)
+  --   V-sync : lines   0 ..  2   (3 broad-sync lines)
+  --   V back :         3 .. 43   (41-line back porch)
+  --   Active :        44 .. 619  (576 active lines)
+  --   V front:       620 .. 624  (5-line front porch)
+  -- -------------------------------------------------------------------------
+  constant V_ACT_S_P  : integer := 44;
+  constant V_ACT_E_P  : integer := V_ACT_S_P + 576 - 1;   -- 619
+  constant V_SYNC_W_P : integer := 3;
+
+  -- -------------------------------------------------------------------------
+  -- Unified frame boundaries  (resolved at elaboration by sel_int)
+  -- -------------------------------------------------------------------------
+  constant V_FRAME_S  : integer := sel_int(PROGRESSIVE, V_ACT_S_P,  V_ACT_S_F1);
+  constant V_FRAME_E  : integer := sel_int(PROGRESSIVE, V_ACT_E_P,  V_ACT_E_F2);
+
+  -- Active rows per field/frame  (288 interlaced per field, 576 progressive)
+  constant V_ACTIVE_F : integer := sel_int(PROGRESSIVE, 576, 288);
 
   constant NUM_ZONES  : integer := 8;
-  constant ZONE_W     : integer := H_ACTIVE  / NUM_ZONES;   -- 65
-  constant ZONE_H     : integer := V_ACTIVE_F / NUM_ZONES;  -- 36
+  constant ZONE_W     : integer := H_ACTIVE  / NUM_ZONES;
+  constant ZONE_H     : integer := V_ACTIVE_F / NUM_ZONES;  -- 36 (il) / 72 (prog)
 
   type zone_kind    is (Z_BLACK, Z_WHITE, Z_STRIPE);
   type zone_table_t is array (0 to NUM_ZONES - 1) of zone_kind;
@@ -133,30 +142,24 @@ architecture rtl of pal_tv_bram_top is
   );
 
   constant GZONES  : integer := 10;
-  constant GZONE_W : integer := H_ACTIVE  / GZONES;   -- 52
-  constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28
+  constant GZONE_W : integer := H_ACTIVE  / GZONES;
+  constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28 (il) / 57 (prog)
 
-  -- Bouncing ball (sel = 5) — runtime-controllable size and speed
+  -- Ball
   signal ball_w_s      : integer range 1 to 520 := 60;
   signal ball_h_s      : integer range 1 to 576 := 50;
   signal ball_spd_h_s  : integer range 1 to 15  := 3;
   signal ball_spd_v_s  : integer range 1 to 15  := 2;
 
-  -- Crosshatch grid (sel = 8)
+  -- Crosshatch
   signal cross_h_s     : integer range 1 to 520 := 52;
   signal cross_v_s     : integer range 1 to 576 := 58;
   signal cross_x_cnt   : integer range 0 to 519 := 0;
   signal cross_y_cnt   : integer range 0 to 575 := 0;
   signal cross_on      : std_logic;
-  -- Centre cross (sel = 9)
   signal centre_on     : std_logic;
 
-
-  -- -----------------------------------------------------------------------
-  -- 1-bit BRAM double-buffer (Vivado: infer Block RAM via ram_style attribute)
-  --   Bank 0 and Bank 1.  disp_buf selects which bank is on display;
-  --   the other bank is the back buffer available for host writes.
-  -- -----------------------------------------------------------------------
+  -- BRAM double-buffer
   type bram_t is array (0 to BRAM_DEPTH - 1) of std_logic;
   signal bram_mem_0   : bram_t := (others => '0');
   signal bram_mem_1   : bram_t := (others => '0');
@@ -164,48 +167,48 @@ architecture rtl of pal_tv_bram_top is
   attribute ram_style of bram_mem_0 : signal is "block";
   attribute ram_style of bram_mem_1 : signal is "block";
 
-  -- Double-buffer state
-  signal disp_buf      : std_logic := '0';  -- bank currently displayed
-  signal swap_req      : std_logic := '0';  -- swap pending V-blank
+  signal disp_buf      : std_logic := '0';
+  signal swap_req      : std_logic := '0';
   signal buf_swapped_s : std_logic := '0';
 
-  signal bram_rd_line_base : integer := 0;               -- BRAM start addr of current active line
-  signal bram_px_cnt  : integer range 0 to H_ACTIVE - 1 := 0;  -- pixel offset within line
-  signal bram_rd_sum  : integer := 0;                    -- line_base + px_cnt (combinational)
+  signal bram_rd_line_base : integer := 0;
+  signal bram_px_cnt  : integer range 0 to H_ACTIVE - 1 := 0;
+  signal bram_rd_sum  : integer := 0;
   signal bram_rd_addr : integer range 0 to BRAM_DEPTH - 1 := 0;
   signal bram_pixel   : std_logic;
   signal bram_len_i   : integer range 1 to BRAM_DEPTH;
   signal bram_level   : std_logic_vector(3 downto 0);
 
-  -- Animation: bouncing ball (sel = 5)
-  signal screen_x : integer := 0;   -- pixel column within active line (0..H_ACTIVE-1)
-  signal screen_y : integer := 0;   -- screen row (0..575; even = F1, odd = F2)
-  signal ball_x   : integer := 0;   -- ball left  edge (0 .. H_ACTIVE - BALL_W)
-  signal ball_y   : integer := 0;   -- ball top   edge (0 .. 576 - BALL_H)
-  signal ball_vx  : integer := 3;   -- horizontal velocity (pixels / frame)
-  signal ball_vy  : integer := 2;   -- vertical   velocity (rows   / frame)
+  -- Screen counters and ball
+  signal screen_x : integer := 0;
+  signal screen_y : integer := 0;
+  signal ball_x   : integer := 0;
+  signal ball_y   : integer := 0;
+  signal ball_vx  : integer := 3;
+  signal ball_vy  : integer := 2;
   signal ball_on  : std_logic := '0';
-
 
   -- H/V counters
   signal h_cnt : integer range 0 to 639;
   signal v_cnt : integer range 0 to 624;
   signal ce_s  : std_logic;
 
-  -- Interlaced composite sync
+  -- Sync (driven by whichever generator is selected)
   signal csync_s      : std_logic;
   signal field_s      : std_logic;
   signal active_s     : std_logic;
-  -- Separate line / frame sync
-  signal in_vsync_s   : std_logic;   -- HIGH during vsync broad-sync region
-  signal line_sync_s  : std_logic;   -- H sync pulse, suppressed during vsync
-  signal frame_sync_s : std_logic;   -- V sync = in_vsync_s
 
+  -- Derived sync outputs
+  signal in_vsync_s   : std_logic;
+  signal line_sync_s  : std_logic;
+  signal frame_sync_s : std_logic;
+
+  -- Active region flags
   signal in_f1_active  : boolean;
   signal in_f2_active  : boolean;
   signal in_any_active : boolean;
 
-  -- Pattern generator state
+  -- Pattern state
   signal zone_idx_v   : integer range 0 to NUM_ZONES - 1 := 0;
   signal px_in_zone   : integer range 0 to ZONE_W - 1     := 0;
   signal stripe_cnt_v : integer range 0 to STRIPE_W - 1   := 0;
@@ -226,7 +229,6 @@ architecture rtl of pal_tv_bram_top is
   signal sel_i        : integer range 0 to 255;
   signal active_level : std_logic_vector(3 downto 0);
 
-  -- Brightness / black level
   signal white_level_i : integer range 4 to 15;
   signal white_s       : std_logic_vector(3 downto 0);
   signal black_level_i : integer range 4 to 15;
@@ -245,49 +247,68 @@ begin
 
   sel_i <= to_integer(unsigned(sel));
 
-  -- -----------------------------------------------------------------------
-  -- Port-driven runtime parameters: ball size / speed, crosshatch pitch
-  -- -----------------------------------------------------------------------
-  ball_w_s     <= 1 when to_integer(unsigned(ball_w_i)) = 0
-                    else to_integer(unsigned(ball_w_i));
-  ball_h_s     <= 1 when to_integer(unsigned(ball_h_i)) = 0
-                    else to_integer(unsigned(ball_h_i));
-  ball_spd_h_s <= 1 when to_integer(unsigned(ball_spd_h)) = 0
-                    else to_integer(unsigned(ball_spd_h));
-  ball_spd_v_s <= 1 when to_integer(unsigned(ball_spd_v)) = 0
-                    else to_integer(unsigned(ball_spd_v));
-  cross_h_s    <= 1 when to_integer(unsigned(cross_h_i)) = 0
-                    else to_integer(unsigned(cross_h_i));
-  cross_v_s    <= 1 when to_integer(unsigned(cross_v_i)) = 0
-                    else to_integer(unsigned(cross_v_i));
+  -- -------------------------------------------------------------------------
+  -- Runtime parameter clamping
+  -- -------------------------------------------------------------------------
+  ball_w_s     <= 1 when to_integer(unsigned(ball_w_i))   = 0 else to_integer(unsigned(ball_w_i));
+  ball_h_s     <= 1 when to_integer(unsigned(ball_h_i))   = 0 else to_integer(unsigned(ball_h_i));
+  ball_spd_h_s <= 1 when to_integer(unsigned(ball_spd_h)) = 0 else to_integer(unsigned(ball_spd_h));
+  ball_spd_v_s <= 1 when to_integer(unsigned(ball_spd_v)) = 0 else to_integer(unsigned(ball_spd_v));
+  cross_h_s    <= 1 when to_integer(unsigned(cross_h_i))  = 0 else to_integer(unsigned(cross_h_i));
+  cross_v_s    <= 1 when to_integer(unsigned(cross_v_i))  = 0 else to_integer(unsigned(cross_v_i));
 
-  -- Centre cross: vertical centre column + horizontal centre row
   centre_on <= '1' when screen_x = H_ACTIVE / 2 or screen_y = 288 else '0';
-
-  -- Crosshatch: pixel is on a grid line when either counter = 0
   cross_on  <= '1' when cross_x_cnt = 0 or cross_y_cnt = 0 else '0';
 
+  -- -------------------------------------------------------------------------
+  -- Shared free-running H/V counters
+  -- -------------------------------------------------------------------------
   u_timing : entity work.pal_timing
     generic map (H_TOTAL => H_TOTAL, V_TOTAL => V_TOTAL, CLK_MHZ => CLK_MHZ)
     port map (clk => clk, rst => rst, ce => ce_s,
               h_cnt => h_cnt, v_cnt => v_cnt);
 
-  u_csync : entity work.pal_csync_il
-    generic map (
-      H_FRONT => H_FRONT, H_SYNC_W => H_SYNC_W,
-      H_BACK  => H_BACK,  H_ACTIVE => H_ACTIVE, H_TOTAL => H_TOTAL,
-      V_ACT_S_F1 => V_ACT_S_F1, V_ACT_E_F1 => V_ACT_E_F1,
-      V_ACT_S_F2 => V_ACT_S_F2, V_ACT_E_F2 => V_ACT_E_F2)
-    port map (h_cnt => h_cnt, v_cnt => v_cnt,
-              csync => csync_s, field => field_s, active => active_s);
+  -- -------------------------------------------------------------------------
+  -- Sync generator -- selected at elaboration by PROGRESSIVE generic
+  --   false -> pal_csync_il   full PAL interlaced composite sync
+  --   true  -> pal_csync_prog simple broad-pulse progressive sync
+  -- -------------------------------------------------------------------------
+  gen_il : if not PROGRESSIVE generate
+    u_csync : entity work.pal_csync_il
+      generic map (
+        H_FRONT    => H_FRONT,    H_SYNC_W   => H_SYNC_W,
+        H_BACK     => H_BACK,     H_ACTIVE   => H_ACTIVE,  H_TOTAL => H_TOTAL,
+        V_ACT_S_F1 => V_ACT_S_F1, V_ACT_E_F1 => V_ACT_E_F1,
+        V_ACT_S_F2 => V_ACT_S_F2, V_ACT_E_F2 => V_ACT_E_F2)
+      port map (h_cnt => h_cnt, v_cnt => v_cnt,
+                csync => csync_s, field => field_s, active => active_s);
+  end generate gen_il;
 
-  in_f1_active  <= (v_cnt >= V_ACT_S_F1 and v_cnt <= V_ACT_E_F1);
-  in_f2_active  <= (v_cnt >= V_ACT_S_F2 and v_cnt <= V_ACT_E_F2);
+  gen_prog : if PROGRESSIVE generate
+    u_csync_p : entity work.pal_csync_prog
+      generic map (
+        H_FRONT  => H_FRONT,   H_SYNC_W => H_SYNC_W,
+        H_BACK   => H_BACK,    H_ACTIVE => H_ACTIVE,  H_TOTAL  => H_TOTAL,
+        V_ACT_S  => V_ACT_S_P, V_ACT_E  => V_ACT_E_P, V_SYNC_W => V_SYNC_W_P)
+      port map (h_cnt => h_cnt, v_cnt => v_cnt,
+                csync => csync_s, field => field_s, active => active_s);
+  end generate gen_prog;
+
+  -- -------------------------------------------------------------------------
+  -- Active region flags
+  --   Interlaced : two separate field windows (F1 and F2)
+  --   Progressive: single active window mapped onto in_f1_active;
+  --                in_f2_active is permanently false
+  -- -------------------------------------------------------------------------
+  in_f1_active  <= (v_cnt >= V_ACT_S_F1 and v_cnt <= V_ACT_E_F1) when not PROGRESSIVE
+                   else (v_cnt >= V_ACT_S_P and v_cnt <= V_ACT_E_P);
+  in_f2_active  <= (v_cnt >= V_ACT_S_F2 and v_cnt <= V_ACT_E_F2) when not PROGRESSIVE
+                   else false;
   in_any_active <= in_f1_active or in_f2_active;
 
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   -- Vertical bar generator
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
@@ -304,25 +325,25 @@ begin
             px_in_zone <= px_in_zone + 1;
             if stripe_cnt_v = STRIPE_W - 1 then
               stripe_cnt_v <= 0; stripe_ph_v <= not stripe_ph_v;
-            else
-              stripe_cnt_v <= stripe_cnt_v + 1;
-            end if;
+            else stripe_cnt_v <= stripe_cnt_v + 1; end if;
           end if;
         end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   -- Horizontal bar generator
-  -- -----------------------------------------------------------------------
+  --   Resets at frame/F1 start; also at F2 start (interlaced only).
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
         zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
       elsif ce_s = '1' then
-        if (v_cnt = V_ACT_S_F1 - 1 or v_cnt = V_ACT_S_F2 - 1) and
+        if (v_cnt = V_FRAME_S - 1 or
+            (not PROGRESSIVE and v_cnt = V_ACT_S_F2 - 1)) and
            h_cnt = H_TOTAL - 1 then
           zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
@@ -333,18 +354,16 @@ begin
             line_in_zone <= line_in_zone + 1;
             if stripe_cnt_h = STRIPE_W - 1 then
               stripe_cnt_h <= 0; stripe_ph_h <= not stripe_ph_h;
-            else
-              stripe_cnt_h <= stripe_cnt_h + 1;
-            end if;
+            else stripe_cnt_h <= stripe_cnt_h + 1; end if;
           end if;
         end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   -- Horizontal gradient generator
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
@@ -357,145 +376,122 @@ begin
           if gpx_in = GZONE_W - 1 then
             if gzx_idx < GZONES - 1 then gzx_idx <= gzx_idx + 1; end if;
             gpx_in <= 0;
-          else
-            gpx_in <= gpx_in + 1;
-          end if;
+          else gpx_in <= gpx_in + 1; end if;
         end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   -- Vertical gradient generator
-  -- -----------------------------------------------------------------------
+  --   Resets at frame/F1 start; also at F2 start (interlaced only).
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
         gzy_idx <= 0; gln_in <= 0;
       elsif ce_s = '1' then
-        if (v_cnt = V_ACT_S_F1 - 1 or v_cnt = V_ACT_S_F2 - 1) and
+        if (v_cnt = V_FRAME_S - 1 or
+            (not PROGRESSIVE and v_cnt = V_ACT_S_F2 - 1)) and
            h_cnt = H_TOTAL - 1 then
           gzy_idx <= 0; gln_in <= 0;
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
           if gln_in = GZONE_H - 1 then
             if gzy_idx < GZONES - 1 then gzy_idx <= gzy_idx + 1; end if;
             gln_in <= 0;
-          else
-            gln_in <= gln_in + 1;
-          end if;
+          else gln_in <= gln_in + 1; end if;
         end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
-  -- Animation: screen pixel-X counter
-  --   Resets to 0 at the clock before the first active pixel on each line.
-  --   Holds current column index while active_s = '1'.
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
+  -- Screen X counter
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
         screen_x <= 0;
       elsif ce_s = '1' then
-        if h_cnt = H_ACT_S - 1 and in_any_active then
-          screen_x <= 0;          -- pre-load: next clock is first active pixel
-        elsif active_s = '1' then
-          screen_x <= screen_x + 1;
-        end if;
+        if h_cnt = H_ACT_S - 1 and in_any_active then screen_x <= 0;
+        elsif active_s = '1' then screen_x <= screen_x + 1; end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
-  -- Animation: screen row-Y counter
-  --   F1 line k → screen row 2k (even), F2 line k → screen row 2k+1 (odd).
-  --   Pre-loaded one line before the first active line of each field so that
-  --   screen_y = 0 during F1 line 0 and screen_y = 1 during F2 line 0.
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
+  -- Screen Y counter  (image row 0..575)
+  --   Interlaced : F1 line k = row 2k (even), F2 line k = row 2k+1 (odd)
+  --                Step +2; pre-loaded 0 (F1) or 1 (F2).
+  --   Progressive: row 0,1,2,...,575 sequentially. Step +1; pre-loaded 0.
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
         screen_y <= 0;
       elsif ce_s = '1' then
-        if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
-          screen_y <= 0;              -- F1 line 0 = screen row 0
-        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
-          screen_y <= 1;              -- F2 line 0 = screen row 1
-        elsif in_any_active and h_cnt = H_TOTAL - 1 then
-          screen_y <= screen_y + 2;   -- interlace: skip one row per active line
+        if not PROGRESSIVE then
+          if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
+            screen_y <= 0;                        -- F1 frame start: row 0
+          elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+            screen_y <= 1;                        -- F2 field start: row 1
+          elsif in_any_active and h_cnt = H_TOTAL - 1 then
+            screen_y <= screen_y + 2;             -- interlace: skip one row
+          end if;
+        else
+          if v_cnt = V_ACT_S_P - 1 and h_cnt = H_TOTAL - 1 then
+            screen_y <= 0;                        -- progressive frame start
+          elsif in_any_active and h_cnt = H_TOTAL - 1 then
+            screen_y <= screen_y + 1;             -- sequential row advance
+          end if;
         end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
-  -- Animation: ball physics  (updated once per frame at end of F2)
-  --   Position is clamped by elastic bounce: reflect velocity on wall contact.
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
+  -- Ball physics  (updated once per frame at end of last active line)
+  --   Interlaced : V_FRAME_E = V_ACT_E_F2  (end of F2)
+  --   Progressive: V_FRAME_E = V_ACT_E_P   (end of single active region)
+  -- -------------------------------------------------------------------------
   process(clk)
     variable nx, ny, nvx, nvy : integer;
   begin
     if rising_edge(clk) then
       if rst = '1' then
-        ball_x  <= 0;
-        ball_y  <= 0;
-        ball_vx <= ball_spd_h_s;
-        ball_vy <= ball_spd_v_s;
-      elsif ce_s = '1' and v_cnt = V_ACT_E_F2 and h_cnt = H_TOTAL - 1 then
-        nx  := ball_x + ball_vx;
-        ny  := ball_y + ball_vy;
-        nvx := ball_vx;
-        nvy := ball_vy;
-        -- Right wall
+        ball_x <= 0; ball_y <= 0;
+        ball_vx <= ball_spd_h_s; ball_vy <= ball_spd_v_s;
+      elsif ce_s = '1' and v_cnt = V_FRAME_E and h_cnt = H_TOTAL - 1 then
+        nx := ball_x + ball_vx;  ny := ball_y + ball_vy;
+        nvx := ball_vx;          nvy := ball_vy;
         if nx > H_ACTIVE - ball_w_s then
-          nx  := 2 * (H_ACTIVE - ball_w_s) - nx;
-          nvx := -nvx;
+          nx := 2 * (H_ACTIVE - ball_w_s) - nx; nvx := -nvx;
         end if;
-        -- Left wall
-        if nx < 0 then
-          nx  := -nx;
-          nvx := -nvx;
-        end if;
-        -- Bottom wall
+        if nx < 0 then nx := -nx; nvx := -nvx; end if;
         if ny > 576 - ball_h_s then
-          ny  := 2 * (576 - ball_h_s) - ny;
-          nvy := -nvy;
+          ny := 2 * (576 - ball_h_s) - ny; nvy := -nvy;
         end if;
-        -- Top wall
-        if ny < 0 then
-          ny  := -ny;
-          nvy := -nvy;
-        end if;
-        ball_x  <= nx;
-        ball_y  <= ny;
-        ball_vx <= nvx;
-        ball_vy <= nvy;
+        if ny < 0 then ny := -ny; nvy := -nvy; end if;
+        ball_x <= nx; ball_y <= ny; ball_vx <= nvx; ball_vy <= nvy;
       end if;
     end if;
   end process;
 
-  -- '1' when the current pixel lies inside the ball rectangle
-  ball_on <= '1' when screen_x >= ball_x and
-                      screen_x <  ball_x + ball_w_s and
-                      screen_y >= ball_y and
-                      screen_y <  ball_y + ball_h_s
+  ball_on <= '1' when screen_x >= ball_x and screen_x < ball_x + ball_w_s and
+                      screen_y >= ball_y and screen_y < ball_y + ball_h_s
              else '0';
 
-
-  -- -----------------------------------------------------------------------
-  -- BRAM: synchronous write, asynchronous read
-  -- -----------------------------------------------------------------------
-  -- Clamp bram_len to [1 .. BRAM_DEPTH]; 0 or overflow → use full depth
+  -- -------------------------------------------------------------------------
+  -- BRAM: synchronous write (back buffer), asynchronous read (front buffer)
+  -- -------------------------------------------------------------------------
   bram_len_i <= BRAM_DEPTH
                   when to_integer(unsigned(bram_len)) = 0 or
                        to_integer(unsigned(bram_len)) > BRAM_DEPTH
                   else to_integer(unsigned(bram_len));
 
-  -- Write port: always targets the back buffer (bank NOT currently displayed)
   process(clk)
   begin
     if rising_edge(clk) then
@@ -510,75 +506,87 @@ begin
     end if;
   end process;
 
-  -- Double-buffer swap: latch request; execute at last pixel of last F2 active line
+  -- -------------------------------------------------------------------------
+  -- Double-buffer swap  (at end of last active line, i.e. V_FRAME_E)
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
-        disp_buf      <= '0';
-        swap_req      <= '0';
-        buf_swapped_s <= '0';
+        disp_buf <= '0'; swap_req <= '0'; buf_swapped_s <= '0';
       elsif ce_s = '1' then
         buf_swapped_s <= '0';
-        if buf_swap = '1' then
-          swap_req <= '1';
-        end if;
-        if v_cnt = V_ACT_E_F2 and h_cnt = H_TOTAL - 1 and swap_req = '1' then
-          disp_buf      <= not disp_buf;
-          swap_req      <= '0';
-          buf_swapped_s <= '1';
+        if buf_swap = '1' then swap_req <= '1'; end if;
+        if v_cnt = V_FRAME_E and h_cnt = H_TOTAL - 1 and swap_req = '1' then
+          disp_buf <= not disp_buf; swap_req <= '0'; buf_swapped_s <= '1';
         end if;
       end if;
     end if;
   end process;
 
-  -- Natural sequential row address generator.
-  --   F1 reads even image rows (0, 2, 4, …);  F2 reads odd rows (1, 3, 5, …).
-  --   bram_rd_line_base: BRAM start address of the current active line.
-  --   bram_px_cnt:       pixel offset within the active line (0 .. H_ACTIVE-1).
+  -- -------------------------------------------------------------------------
+  -- BRAM address generator
+  --
+  --   Interlaced stride = 2*H_ACTIVE:
+  --     F1 start -> addr 0         (image row 0)
+  --     F2 start -> addr H_ACTIVE  (image row 1)
+  --     Each active line: base += 2*H_ACTIVE  (reads rows 0,2,4,... or 1,3,5,...)
+  --
+  --   Progressive stride = H_ACTIVE:
+  --     Frame start -> addr 0
+  --     Each active line: base += H_ACTIVE  (reads rows 0,1,2,...,575)
+  --
+  -- Host writes identical sequential row layout for both modes.
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
-        bram_rd_line_base <= 0;
-        bram_px_cnt       <= 0;
+        bram_rd_line_base <= 0; bram_px_cnt <= 0;
       elsif ce_s = '1' then
-        -- F1 frame start: line 0 → image row 0 (addr 0)
-        if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
+
+        -- Frame / F1 start: address 0 (image row 0)
+        if v_cnt = V_FRAME_S - 1 and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= 0;
           bram_px_cnt       <= 0;
-        -- F2 field start: line 0 → image row 1 (addr H_ACTIVE = 520)
-        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+
+        -- F2 field start (interlaced only): address H_ACTIVE (image row 1)
+        elsif not PROGRESSIVE and
+              v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= H_ACTIVE;
           bram_px_cnt       <= 0;
-        -- End of any other active line: stride by 2 rows (interlace step)
+
+        -- End of any active line: advance base by mode stride
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
-          bram_rd_line_base <= bram_rd_line_base + 2 * H_ACTIVE;
-          bram_px_cnt       <= 0;
+          if PROGRESSIVE then
+            bram_rd_line_base <= bram_rd_line_base + H_ACTIVE;      -- +1 row
+          else
+            bram_rd_line_base <= bram_rd_line_base + 2 * H_ACTIVE;  -- +2 rows (interlace)
+          end if;
+          bram_px_cnt <= 0;
+
         -- Within active region: advance pixel counter
         elsif active_s = '1' then
           bram_px_cnt <= bram_px_cnt + 1;
         end if;
+
       end if;
     end if;
   end process;
 
-  -- Combinational address: sum clamped to [0, bram_len_i)
   bram_rd_sum  <= bram_rd_line_base + bram_px_cnt;
   bram_rd_addr <= bram_rd_sum when bram_rd_sum < bram_len_i else 0;
 
-  -- Asynchronous read from the front (display) bank
   bram_pixel <= bram_mem_0(bram_rd_addr) when disp_buf = '0' else
                 bram_mem_1(bram_rd_addr);
   bram_level <= white_s when bram_pixel = '1' else black_s;
 
-  -- Double-buffer status outputs
   buf_swapped <= buf_swapped_s;
   back_buf_o  <= not disp_buf;
 
-  -- -----------------------------------------------------------------------
-  -- Brightness / black-level control (same as interlaced_top)
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
+  -- Brightness / black-level control
+  -- -------------------------------------------------------------------------
   white_level_i <= 4 when unsigned(brightness) < 4
                      else to_integer(unsigned(brightness));
   white_s <= std_logic_vector(to_unsigned(white_level_i, 4));
@@ -610,25 +618,19 @@ begin
     grad_y_s <= std_logic_vector(to_unsigned(ly, 4));
   end process;
 
-  -- -----------------------------------------------------------------------
-  -- Crosshatch counters (sel = 8)
-  --   cross_x_cnt : 0..cross_h_s-1; resets at start of each active line
-  --   cross_y_cnt : 0..cross_v_s-1; resets at start of each frame, counts active lines
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
+  -- Crosshatch counters
+  -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
-      if rst = '1' then
-        cross_x_cnt <= 0;
+      if rst = '1' then cross_x_cnt <= 0;
       elsif ce_s = '1' then
         if h_cnt = H_ACT_S - 1 and in_any_active then
-          cross_x_cnt <= 0;               -- reset at line start
+          cross_x_cnt <= 0;
         elsif active_s = '1' then
-          if cross_x_cnt = cross_h_s - 1 then
-            cross_x_cnt <= 0;
-          else
-            cross_x_cnt <= cross_x_cnt + 1;
-          end if;
+          if cross_x_cnt = cross_h_s - 1 then cross_x_cnt <= 0;
+          else cross_x_cnt <= cross_x_cnt + 1; end if;
         end if;
       end if;
     end if;
@@ -637,27 +639,21 @@ begin
   process(clk)
   begin
     if rising_edge(clk) then
-      if rst = '1' then
-        cross_y_cnt <= 0;
+      if rst = '1' then cross_y_cnt <= 0;
       elsif ce_s = '1' then
-        -- Reset V counter at the cycle before the very first active line of F1
-        if v_cnt = V_ACT_S_F1 and h_cnt = 0 then
-          cross_y_cnt <= 0;
-        -- Advance once per active line (end-of-line pulse)
+        if v_cnt = V_FRAME_S and h_cnt = 0 then
+          cross_y_cnt <= 0;                      -- reset at frame active start
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
-          if cross_y_cnt = cross_v_s - 1 then
-            cross_y_cnt <= 0;
-          else
-            cross_y_cnt <= cross_y_cnt + 1;
-          end if;
+          if cross_y_cnt = cross_v_s - 1 then cross_y_cnt <= 0;
+          else cross_y_cnt <= cross_y_cnt + 1; end if;
         end if;
       end if;
     end if;
   end process;
 
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   -- Active-level mux and DAC output
-  -- -----------------------------------------------------------------------
+  -- -------------------------------------------------------------------------
   with ZONE_TABLE(zone_idx_v) select
     color_v <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_v when Z_STRIPE;
   with ZONE_TABLE(zone_idx_h) select
@@ -666,11 +662,11 @@ begin
   active_level <= bram_level when sel_i = 4 else
                   white_s    when sel_i = 5 and ball_on   = '1' else
                   black_s    when sel_i = 5 else
-                  white_s    when sel_i = 6 else                        -- full white
-                  black_s    when sel_i = 7 else                        -- full black
-                  white_s    when sel_i = 8 and cross_on  = '1' else   -- crosshatch
+                  white_s    when sel_i = 6 else
+                  black_s    when sel_i = 7 else
+                  white_s    when sel_i = 8 and cross_on  = '1' else
                   black_s    when sel_i = 8 else
-                  white_s    when sel_i = 9 and centre_on = '1' else   -- centre cross
+                  white_s    when sel_i = 9 and centre_on = '1' else
                   black_s    when sel_i = 9 else
                   grad_x_s   when sel_i = 2 else
                   grad_y_s   when sel_i = 3 else
@@ -678,18 +674,18 @@ begin
                                   (sel_i = 1 and color_h = '1') else
                   black_s;
 
-  -- -----------------------------------------------------------------------
-  -- Separate line sync and frame sync
-  --
-  --  in_vsync_s  : HIGH during the PAL broad-sync (vsync) region
-  --     F1: v =  0.. 7   (5 pre-eq + 5 broad + 5 post-eq half-lines ≈ lines 0–7)
-  --     F2: v = 312..319
-  --
-  --  line_sync_s : H sync pulse only, suppressed during vsync lines
-  --  frame_sync_s: HIGH for the entire vsync region (one pulse per field)
-  -- -----------------------------------------------------------------------
-  in_vsync_s   <= '1' when (v_cnt <= 7) or (v_cnt >= 312 and v_cnt <= 319)
-                  else '0';
+  -- -------------------------------------------------------------------------
+  -- Separate line sync / frame sync outputs
+  --   in_vsync_s: high during V-sync region
+  --     Interlaced: lines 0..7 (F1 eq+broad) and 312..319 (F2 eq+broad)
+  --     Progressive: lines 0..V_SYNC_W_P-1
+  -- -------------------------------------------------------------------------
+  in_vsync_s <= '1' when
+                    (not PROGRESSIVE and
+                       ((v_cnt <= 7) or (v_cnt >= 312 and v_cnt <= 319)))
+                    or
+                    (PROGRESSIVE and v_cnt < V_SYNC_W_P)
+                else '0';
 
   line_sync_s  <= '1' when h_cnt >= H_FRONT and
                             h_cnt < H_FRONT + H_SYNC_W and
@@ -698,10 +694,9 @@ begin
 
   frame_sync_s <= in_vsync_s;
 
-  -- Blanking pedestal is always LEVEL_BLANK (TV standard; unaffected by black_lvl)
-  dac_out       <= LEVEL_SYNC   when csync_s = '1' else
-                   active_level when active_s = '1' else
-                   LEVEL_BLANK;
+  dac_out      <= LEVEL_SYNC   when csync_s = '1' else
+                  active_level when active_s = '1' else
+                  LEVEL_BLANK;
 
   csync_o      <= csync_s;
   line_sync_o  <= line_sync_s;
