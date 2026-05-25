@@ -2,36 +2,20 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
--- PAL B&W BRAM Video IP  --  interlaced OR progressive  (V1.2)
--- =============================================================
+-- PAL B&W BRAM Video IP  --  interlaced  (V1.3)
+-- ================================================
 --
 -- Revision history
 --   V1.0 : PAL interlaced BRAM IP (625/50, interlaced composite sync)
 --   V1.1 : Added standalone boolean FIFO (pal_fifo_bool, no BRAM link)
---   V1.2 : PROGRESSIVE generic -- same entity drives CRT (interlaced)
---          and progressive displays with a single generic switch.
+--   V1.2 : PROGRESSIVE generic (removed in V1.3)
+--   V1.3 : Removed PROGRESSIVE generic; interlaced-only.
+--          Eliminates pal_csync_prog dependency for Vivado IP packager.
 --
--- Generic PROGRESSIVE (default false = interlaced, backward compatible):
---
---   false : PAL 625/50 interlaced -- CRT TV, composite/SCART.
---           Two fields per frame; F1 (even rows) then F2 (odd rows).
---           Full PAL equalising-pulse composite sync via pal_csync_il.
---
---   true  : Progressive 576p-style (625 lines / 50 Hz, single sweep).
---           All 576 active rows in one continuous top-to-bottom pass.
---           Broad-pulse composite sync via pal_csync_prog.
---           Suitable for: PC monitors (RGBS/SCART), frame-grabbers.
---
--- BRAM pixel layout -- IDENTICAL for both modes (host write unchanged):
---   Write image rows 0, 1, 2 ... 575 sequentially into the back buffer.
---   The hardware routes each row to the correct field (interlaced) or
---   line (progressive) automatically via the address stride.
---
---   Interlaced stride: bram_rd_line_base advances by 2*H_ACTIVE per line.
---     F1 reads rows 0,2,4,...  F2 reads rows 1,3,5,...
---
---   Progressive stride: bram_rd_line_base advances by H_ACTIVE per line.
---     Rows read sequentially: 0,1,2,...,575 in one sweep.
+-- PAL 625/50 interlaced, two fields per frame.
+--   F1 (even rows 0,2,4,...): lines V_ACT_S_F1 .. V_ACT_E_F1
+--   F2 (odd  rows 1,3,5,...): lines V_ACT_S_F2 .. V_ACT_E_F2
+--   Composite sync via pal_csync_il.
 --
 -- sel 0  Vertical bars
 -- sel 1  Horizontal bars
@@ -46,7 +30,6 @@ use ieee.numeric_std.all;
 
 entity pal_tv_bram_top is
   generic (
-    PROGRESSIVE  : boolean := false;   -- false=interlaced CRT, true=progressive
     H_FRONT      : integer := 16;
     H_SYNC_W     : integer := 47;
     H_BACK       : integer := 57;
@@ -91,15 +74,6 @@ end entity pal_tv_bram_top;
 
 architecture rtl of pal_tv_bram_top is
 
-  -- -------------------------------------------------------------------------
-  -- Helper: pick one of two integers at elaboration based on a boolean.
-  -- Used because VHDL constant declarations do not support "when/else".
-  -- -------------------------------------------------------------------------
-  function sel_int(cond : boolean; t, f : integer) return integer is
-  begin
-    if cond then return t; else return f; end if;
-  end function;
-
   constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
 
   -- -------------------------------------------------------------------------
@@ -110,29 +84,16 @@ architecture rtl of pal_tv_bram_top is
   constant V_ACT_S_F2 : integer := 336;
   constant V_ACT_E_F2 : integer := 623;
 
-  -- -------------------------------------------------------------------------
-  -- Progressive V timing  (576p-style, single sweep, 625-line frame)
-  --   V-sync : lines   0 ..  2   (3 broad-sync lines)
-  --   V back :         3 .. 43   (41-line back porch)
-  --   Active :        44 .. 619  (576 active lines)
-  --   V front:       620 .. 624  (5-line front porch)
-  -- -------------------------------------------------------------------------
-  constant V_ACT_S_P  : integer := 44;
-  constant V_ACT_E_P  : integer := V_ACT_S_P + 576 - 1;   -- 619
-  constant V_SYNC_W_P : integer := 3;
+  -- Frame boundaries
+  constant V_FRAME_S  : integer := V_ACT_S_F1;
+  constant V_FRAME_E  : integer := V_ACT_E_F2;
 
-  -- -------------------------------------------------------------------------
-  -- Unified frame boundaries  (resolved at elaboration by sel_int)
-  -- -------------------------------------------------------------------------
-  constant V_FRAME_S  : integer := sel_int(PROGRESSIVE, V_ACT_S_P,  V_ACT_S_F1);
-  constant V_FRAME_E  : integer := sel_int(PROGRESSIVE, V_ACT_E_P,  V_ACT_E_F2);
-
-  -- Active rows per field/frame  (288 interlaced per field, 576 progressive)
-  constant V_ACTIVE_F : integer := sel_int(PROGRESSIVE, 576, 288);
+  -- Active rows per field (288 lines per field, 576 total)
+  constant V_ACTIVE_F : integer := 288;
 
   constant NUM_ZONES  : integer := 8;
-  constant ZONE_W     : integer := H_ACTIVE  / NUM_ZONES;
-  constant ZONE_H     : integer := V_ACTIVE_F / NUM_ZONES;  -- 36 (il) / 72 (prog)
+  constant ZONE_W     : integer := H_ACTIVE  / NUM_ZONES;   -- 65
+  constant ZONE_H     : integer := V_ACTIVE_F / NUM_ZONES;  -- 36
 
   type zone_kind    is (Z_BLACK, Z_WHITE, Z_STRIPE);
   type zone_table_t is array (0 to NUM_ZONES - 1) of zone_kind;
@@ -142,8 +103,8 @@ architecture rtl of pal_tv_bram_top is
   );
 
   constant GZONES  : integer := 10;
-  constant GZONE_W : integer := H_ACTIVE  / GZONES;
-  constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28 (il) / 57 (prog)
+  constant GZONE_W : integer := H_ACTIVE  / GZONES;   -- 52
+  constant GZONE_H : integer := V_ACTIVE_F / GZONES;  -- 28
 
   -- Ball
   signal ball_w_s      : integer range 1 to 520 := 60;
@@ -193,7 +154,7 @@ architecture rtl of pal_tv_bram_top is
   signal v_cnt : integer range 0 to 624;
   signal ce_s  : std_logic;
 
-  -- Sync (driven by whichever generator is selected)
+  -- Sync
   signal csync_s      : std_logic;
   signal field_s      : std_logic;
   signal active_s     : std_logic;
@@ -269,55 +230,22 @@ begin
               h_cnt => h_cnt, v_cnt => v_cnt);
 
   -- -------------------------------------------------------------------------
-  -- Sync generator -- selected at elaboration by PROGRESSIVE generic
-  --   false -> pal_csync_il   full PAL interlaced composite sync
-  --   true  -> pal_csync_prog simple broad-pulse progressive sync
+  -- PAL interlaced composite sync
   -- -------------------------------------------------------------------------
-  gen_il : if not PROGRESSIVE generate
-    u_csync : entity work.pal_csync_il
-      generic map (
-        H_FRONT    => H_FRONT,    H_SYNC_W   => H_SYNC_W,
-        H_BACK     => H_BACK,     H_ACTIVE   => H_ACTIVE,  H_TOTAL => H_TOTAL,
-        V_ACT_S_F1 => V_ACT_S_F1, V_ACT_E_F1 => V_ACT_E_F1,
-        V_ACT_S_F2 => V_ACT_S_F2, V_ACT_E_F2 => V_ACT_E_F2)
-      port map (h_cnt => h_cnt, v_cnt => v_cnt,
-                csync => csync_s, field => field_s, active => active_s);
-  end generate gen_il;
-
-  -- Progressive sync inlined -- no external entity required.
-  -- Eliminates pal_csync_prog.vhd dependency for IP packager compatibility.
-  gen_prog : if PROGRESSIVE generate
-    process(h_cnt, v_cnt)
-      variable in_vsync  : boolean;
-      variable in_hsync  : boolean;
-      variable in_broad  : boolean;
-      variable in_active : boolean;
-    begin
-      in_vsync  := (v_cnt < V_SYNC_W_P);
-      in_hsync  := (h_cnt >= H_FRONT) and (h_cnt < H_FRONT + H_SYNC_W);
-      in_broad  := (h_cnt >= H_FRONT) and (h_cnt < H_TOTAL - H_FRONT);
-      in_active := (v_cnt >= V_ACT_S_P) and (v_cnt <= V_ACT_E_P) and
-                   (h_cnt >= H_ACT_S)   and (h_cnt < H_ACT_S + H_ACTIVE);
-      if in_vsync then
-        csync_s <= '1' when in_broad  else '0';
-      else
-        csync_s <= '1' when in_hsync  else '0';
-      end if;
-      field_s  <= '0';
-      active_s <= '1' when in_active else '0';
-    end process;
-  end generate gen_prog;
+  u_csync : entity work.pal_csync_il
+    generic map (
+      H_FRONT    => H_FRONT,    H_SYNC_W   => H_SYNC_W,
+      H_BACK     => H_BACK,     H_ACTIVE   => H_ACTIVE,  H_TOTAL => H_TOTAL,
+      V_ACT_S_F1 => V_ACT_S_F1, V_ACT_E_F1 => V_ACT_E_F1,
+      V_ACT_S_F2 => V_ACT_S_F2, V_ACT_E_F2 => V_ACT_E_F2)
+    port map (h_cnt => h_cnt, v_cnt => v_cnt,
+              csync => csync_s, field => field_s, active => active_s);
 
   -- -------------------------------------------------------------------------
   -- Active region flags
-  --   Interlaced : two separate field windows (F1 and F2)
-  --   Progressive: single active window mapped onto in_f1_active;
-  --                in_f2_active is permanently false
   -- -------------------------------------------------------------------------
-  in_f1_active  <= (v_cnt >= V_ACT_S_F1 and v_cnt <= V_ACT_E_F1) when not PROGRESSIVE
-                   else (v_cnt >= V_ACT_S_P and v_cnt <= V_ACT_E_P);
-  in_f2_active  <= (v_cnt >= V_ACT_S_F2 and v_cnt <= V_ACT_E_F2) when not PROGRESSIVE
-                   else false;
+  in_f1_active  <= (v_cnt >= V_ACT_S_F1 and v_cnt <= V_ACT_E_F1);
+  in_f2_active  <= (v_cnt >= V_ACT_S_F2 and v_cnt <= V_ACT_E_F2);
   in_any_active <= in_f1_active or in_f2_active;
 
   -- -------------------------------------------------------------------------
@@ -348,7 +276,6 @@ begin
 
   -- -------------------------------------------------------------------------
   -- Horizontal bar generator
-  --   Resets at frame/F1 start; also at F2 start (interlaced only).
   -- -------------------------------------------------------------------------
   process(clk)
   begin
@@ -356,8 +283,7 @@ begin
       if rst = '1' then
         zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
       elsif ce_s = '1' then
-        if (v_cnt = V_FRAME_S - 1 or
-            (not PROGRESSIVE and v_cnt = V_ACT_S_F2 - 1)) and
+        if (v_cnt = V_FRAME_S - 1 or v_cnt = V_ACT_S_F2 - 1) and
            h_cnt = H_TOTAL - 1 then
           zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
@@ -398,7 +324,6 @@ begin
 
   -- -------------------------------------------------------------------------
   -- Vertical gradient generator
-  --   Resets at frame/F1 start; also at F2 start (interlaced only).
   -- -------------------------------------------------------------------------
   process(clk)
   begin
@@ -406,8 +331,7 @@ begin
       if rst = '1' then
         gzy_idx <= 0; gln_in <= 0;
       elsif ce_s = '1' then
-        if (v_cnt = V_FRAME_S - 1 or
-            (not PROGRESSIVE and v_cnt = V_ACT_S_F2 - 1)) and
+        if (v_cnt = V_FRAME_S - 1 or v_cnt = V_ACT_S_F2 - 1) and
            h_cnt = H_TOTAL - 1 then
           gzy_idx <= 0; gln_in <= 0;
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
@@ -437,9 +361,9 @@ begin
 
   -- -------------------------------------------------------------------------
   -- Screen Y counter  (image row 0..575)
-  --   Interlaced : F1 line k = row 2k (even), F2 line k = row 2k+1 (odd)
-  --                Step +2; pre-loaded 0 (F1) or 1 (F2).
-  --   Progressive: row 0,1,2,...,575 sequentially. Step +1; pre-loaded 0.
+  --   F1 line k -> row 2k (even rows)   pre-loaded at V_ACT_S_F1 - 1
+  --   F2 line k -> row 2k+1 (odd rows)  pre-loaded at V_ACT_S_F2 - 1
+  --   Each active line advances by 2 (interlace stride).
   -- -------------------------------------------------------------------------
   process(clk)
   begin
@@ -447,29 +371,19 @@ begin
       if rst = '1' then
         screen_y <= 0;
       elsif ce_s = '1' then
-        if not PROGRESSIVE then
-          if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
-            screen_y <= 0;                        -- F1 frame start: row 0
-          elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
-            screen_y <= 1;                        -- F2 field start: row 1
-          elsif in_any_active and h_cnt = H_TOTAL - 1 then
-            screen_y <= screen_y + 2;             -- interlace: skip one row
-          end if;
-        else
-          if v_cnt = V_ACT_S_P - 1 and h_cnt = H_TOTAL - 1 then
-            screen_y <= 0;                        -- progressive frame start
-          elsif in_any_active and h_cnt = H_TOTAL - 1 then
-            screen_y <= screen_y + 1;             -- sequential row advance
-          end if;
+        if v_cnt = V_ACT_S_F1 - 1 and h_cnt = H_TOTAL - 1 then
+          screen_y <= 0;                        -- F1 frame start: row 0
+        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+          screen_y <= 1;                        -- F2 field start: row 1
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          screen_y <= screen_y + 2;             -- interlace: skip one row
         end if;
       end if;
     end if;
   end process;
 
   -- -------------------------------------------------------------------------
-  -- Ball physics  (updated once per frame at end of last active line)
-  --   Interlaced : V_FRAME_E = V_ACT_E_F2  (end of F2)
-  --   Progressive: V_FRAME_E = V_ACT_E_P   (end of single active region)
+  -- Ball physics  (updated once per frame at end of F2 last active line)
   -- -------------------------------------------------------------------------
   process(clk)
     variable nx, ny, nvx, nvy : integer;
@@ -521,7 +435,7 @@ begin
   end process;
 
   -- -------------------------------------------------------------------------
-  -- Double-buffer swap  (at end of last active line, i.e. V_FRAME_E)
+  -- Double-buffer swap  (at end of last active line of F2, i.e. V_FRAME_E)
   -- -------------------------------------------------------------------------
   process(clk)
   begin
@@ -539,18 +453,10 @@ begin
   end process;
 
   -- -------------------------------------------------------------------------
-  -- BRAM address generator
-  --
-  --   Interlaced stride = 2*H_ACTIVE:
-  --     F1 start -> addr 0         (image row 0)
-  --     F2 start -> addr H_ACTIVE  (image row 1)
-  --     Each active line: base += 2*H_ACTIVE  (reads rows 0,2,4,... or 1,3,5,...)
-  --
-  --   Progressive stride = H_ACTIVE:
-  --     Frame start -> addr 0
-  --     Each active line: base += H_ACTIVE  (reads rows 0,1,2,...,575)
-  --
-  -- Host writes identical sequential row layout for both modes.
+  -- BRAM address generator  (interlaced stride = 2*H_ACTIVE)
+  --   F1 start  -> addr 0          (image row 0)
+  --   F2 start  -> addr H_ACTIVE   (image row 1)
+  --   Each active line: base += 2*H_ACTIVE  (reads rows 0,2,4,... or 1,3,5,...)
   -- -------------------------------------------------------------------------
   process(clk)
   begin
@@ -559,24 +465,19 @@ begin
         bram_rd_line_base <= 0; bram_px_cnt <= 0;
       elsif ce_s = '1' then
 
-        -- Frame / F1 start: address 0 (image row 0)
+        -- F1 / frame start: address 0
         if v_cnt = V_FRAME_S - 1 and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= 0;
           bram_px_cnt       <= 0;
 
-        -- F2 field start (interlaced only): address H_ACTIVE (image row 1)
-        elsif not PROGRESSIVE and
-              v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+        -- F2 field start: address H_ACTIVE (image row 1)
+        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= H_ACTIVE;
           bram_px_cnt       <= 0;
 
-        -- End of any active line: advance base by mode stride
+        -- End of active line: advance by 2 rows
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
-          if PROGRESSIVE then
-            bram_rd_line_base <= bram_rd_line_base + H_ACTIVE;      -- +1 row
-          else
-            bram_rd_line_base <= bram_rd_line_base + 2 * H_ACTIVE;  -- +2 rows (interlace)
-          end if;
+          bram_rd_line_base <= bram_rd_line_base + 2 * H_ACTIVE;
           bram_px_cnt <= 0;
 
         -- Within active region: advance pixel counter
@@ -656,7 +557,7 @@ begin
       if rst = '1' then cross_y_cnt <= 0;
       elsif ce_s = '1' then
         if v_cnt = V_FRAME_S and h_cnt = 0 then
-          cross_y_cnt <= 0;                      -- reset at frame active start
+          cross_y_cnt <= 0;
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
           if cross_y_cnt = cross_v_s - 1 then cross_y_cnt <= 0;
           else cross_y_cnt <= cross_y_cnt + 1; end if;
@@ -689,16 +590,9 @@ begin
                   black_s;
 
   -- -------------------------------------------------------------------------
-  -- Separate line sync / frame sync outputs
-  --   in_vsync_s: high during V-sync region
-  --     Interlaced: lines 0..7 (F1 eq+broad) and 312..319 (F2 eq+broad)
-  --     Progressive: lines 0..V_SYNC_W_P-1
+  -- Line sync / frame sync / V-sync outputs
   -- -------------------------------------------------------------------------
-  in_vsync_s <= '1' when
-                    (not PROGRESSIVE and
-                       ((v_cnt <= 7) or (v_cnt >= 312 and v_cnt <= 319)))
-                    or
-                    (PROGRESSIVE and v_cnt < V_SYNC_W_P)
+  in_vsync_s <= '1' when (v_cnt <= 7) or (v_cnt >= 312 and v_cnt <= 319)
                 else '0';
 
   line_sync_s  <= '1' when h_cnt >= H_FRONT and
