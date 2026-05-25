@@ -92,7 +92,6 @@ input[type=color]  { width: 30px; height: 24px; border: 1px solid #1a3a6a;
                      padding: 1px; flex: none; }
 input[type=checkbox] { accent-color: #e94560; width: 13px; height: 13px; flex: none; }
 
-/* small text fields for x/y/size */
 .inp-sm { width: 52px !important; }
 .inp-md { width: 68px !important; }
 
@@ -100,94 +99,158 @@ input[type=checkbox] { accent-color: #e94560; width: 13px; height: 13px; flex: n
 
 /* buttons */
 .btn {
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 10px;
-  transition: filter .15s;
-  white-space: nowrap;
+  border: none; border-radius: 5px; cursor: pointer;
+  font-size: 12px; font-weight: 600; padding: 5px 10px;
+  transition: filter .15s; white-space: nowrap;
 }
 .btn:hover { filter: brightness(1.18); }
-.btn-primary  { background: #e94560; color: #fff; }
-.btn-secondary{ background: #0f3460; color: #e0e0e0; }
-.btn-export   { background: #533483; color: #fff; display: block; width: 100%; margin-top: 5px; padding: 8px; }
-.btn-bin      { background: #1d6b44; color: #fff; display: block; width: 100%; margin-top: 5px; padding: 8px; }
-.btn-sm       { padding: 3px 7px; font-size: 11px; }
-.btn-danger   { background: #5a1a1a; color: #ffaaaa; }
-.btn-add      { background: #1a4a2a; color: #afffaf; font-size: 11px; }
+.btn-primary   { background: #e94560; color: #fff; }
+.btn-secondary { background: #0f3460; color: #e0e0e0; }
+.btn-export    { background: #533483; color: #fff; display: block; width: 100%; margin-top: 5px; padding: 8px; }
+.btn-bin       { background: #1d6b44; color: #fff; display: block; width: 100%; margin-top: 5px; padding: 8px; }
+.btn-sm        { padding: 3px 7px; font-size: 11px; }
+.btn-danger    { background: #5a1a1a; color: #ffaaaa; }
+.btn-add       { background: #1a4a2a; color: #afffaf; font-size: 11px; }
 
 /* ---- Text overlay entries ---- */
 .txt-entry {
-  background: #0a1628;
-  border: 1px solid #1a3a6a;
-  border-radius: 6px;
-  padding: 8px;
-  margin-bottom: 6px;
+  background: #0a1628; border: 1px solid #1a3a6a;
+  border-radius: 6px; padding: 8px; margin-bottom: 6px;
 }
-.txt-entry-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-.txt-entry-head input[type=text] {
-  flex: 1;
-  font-size: 12.5px;
-  background: #162038;
-}
-.txt-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 8px;
-}
+.txt-entry-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.txt-entry-head input[type=text] { flex: 1; font-size: 12.5px; background: #162038; }
+.txt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
 .txt-grid .row { margin-bottom: 0; }
 .txt-grid .lbl { flex: 0 0 36px; font-size: 11px; }
-.txt-entry-no-bg-row {
-  display: flex; align-items: center; gap: 5px;
-  margin-top: 4px; font-size: 11px; color: #aaa;
-}
+.txt-entry-no-bg-row { display: flex; align-items: center; gap: 5px; margin-top: 4px; font-size: 11px; color: #aaa; }
 
 /* ---- Multi-zone rows ---- */
 .mz-entry {
-  background: #0a1628;
-  border: 1px solid #1a3a6a;
-  border-radius: 5px;
-  padding: 7px;
-  margin-bottom: 5px;
-  font-size: 11.5px;
+  background: #0a1628; border: 1px solid #1a3a6a;
+  border-radius: 5px; padding: 7px; margin-bottom: 5px; font-size: 11.5px;
 }
 .mz-row1 { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
 .mz-row2 { display: flex; align-items: center; gap: 5px; }
-.mz-label { font-size: 10.5px; color: #e94560; font-weight: 700;
-            flex: 0 0 44px; }
+.mz-label { font-size: 10.5px; color: #e94560; font-weight: 700; flex: 0 0 44px; }
 
 .hidden { display: none !important; }
 
 /* ---- Canvas area ---- */
 #canvas-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: #0a0a1a;
-  overflow: hidden;
-  gap: 8px;
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: #0a0a1a; overflow: hidden; gap: 8px;
 }
 #canvas-wrap {
-  position: relative;
-  border: 2px solid #0f3460;
-  background: #000;
-  display: inline-block;
-  max-width: 95vw;
-  max-height: 85vh;
-  overflow: hidden;
+  position: relative; border: 2px solid #0f3460;
+  background: #000; display: inline-block;
+  max-width: 95vw; max-height: 85vh; overflow: hidden;
 }
 canvas { display: block; image-rendering: pixelated; }
 #overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 #info-bar { font-size: 11px; color: #888; text-align: center; }
+
+/* ══════════════════════════════════════════
+   BORDER PICKER
+══════════════════════════════════════════ */
+.bp-divider {
+  margin: 10px 0; border-top: 1px solid #1a3a6a;
+  padding-top: 10px;
+}
+.bp-sub-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  color: #e94560; text-transform: uppercase; margin-bottom: 8px;
+}
+.bp-presets {
+  display: grid; grid-template-columns: repeat(6,1fr);
+  gap: 3px; margin-bottom: 9px;
+}
+.bp-btn {
+  background: #0a1628; border: 1px solid #1a3a6a;
+  border-radius: 4px; padding: 4px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  aspect-ratio: 1; transition: border-color .15s, background .15s;
+}
+.bp-btn:hover  { border-color: #e94560; }
+.bp-btn.active { border-color: #e94560; background: rgba(233,69,96,.12); }
+.bp-btn svg    { width: 20px; height: 20px; display: block; }
+
+.bp-canvas-wrap {
+  background: #0a0a1a; border: 1px solid #1a3a6a;
+  border-radius: 6px; padding: 5px; margin-bottom: 9px;
+  display: flex; align-items: center; justify-content: center;
+}
+#bpSvg { width: 100%; max-width: 150px; display: block; overflow: visible; }
+.bp-cell { transition: fill .2s; }
+.bp-vis-line {
+  stroke: #1a3a6a; stroke-width: 1; stroke-dasharray: 4 3;
+  fill: none; transition: stroke .15s, stroke-width .15s, stroke-dasharray .15s;
+}
+.bp-vis-line.bp-on { stroke: #e94560; stroke-width: 2.5; stroke-dasharray: none; }
+.bp-hit { fill: transparent; cursor: pointer; }
+.bp-hit:hover { fill: rgba(233,69,96,.15); }
+
+.bp-labels {
+  display: grid; grid-template-columns: repeat(3,1fr);
+  gap: 3px; margin-bottom: 9px;
+}
+.bp-lbl {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: #888; background: #0a1628;
+  border: 1px solid #1a3a6a; border-radius: 4px;
+  padding: 3px 5px; cursor: pointer;
+  transition: border-color .12s, color .12s;
+}
+.bp-lbl:hover { border-color: #e94560; }
+.bp-lbl.on    { color: #e0e0e0; border-color: #e94560; }
+.bp-lbl-dot   { width: 7px; height: 7px; border-radius: 2px; background: #1a3a6a; flex-shrink: 0; transition: background .12s; }
+.bp-lbl.on .bp-lbl-dot { background: #e94560; }
+
+/* ══════════════════════════════════════════
+   TEMPLATE LIST
+══════════════════════════════════════════ */
+.tmpl-save-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.tmpl-save-row input { flex: 1; }
+.tmpl-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 190px; overflow-y: auto;
+}
+.tmpl-list::-webkit-scrollbar { width: 4px; }
+.tmpl-list::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+.tmpl-item {
+  display: flex; align-items: center; gap: 6px;
+  background: #0a1628; border: 1px solid #1a3a6a;
+  border-radius: 5px; padding: 6px 8px;
+  transition: border-color .15s;
+}
+.tmpl-item:hover { border-color: #e94560; }
+.tmpl-click { flex: 1; cursor: pointer; min-width: 0; }
+.tmpl-name  { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tmpl-meta  { font-size: 10px; color: #888; margin-top: 1px; }
+.no-tmpl    { color: #888; text-align: center; padding: 12px 0; font-size: 11px; }
+
+/* ══════════════════════════════════════════
+   PNG SAVE MODAL
+══════════════════════════════════════════ */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,.72); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal-box {
+  background: #16213e; border: 1px solid #0f3460;
+  border-radius: 10px; padding: 22px 24px; width: 340px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7);
+}
+.modal-box h3   { font-size: 14px; margin-bottom: 5px; color: #e94560; }
+.modal-box p    { color: #888; font-size: 11.5px; margin-bottom: 12px; }
+.modal-box input[type=text] { margin-bottom: 8px; width: 100%; }
+.modal-hint {
+  font-size: 11px; color: #888; background: #0a1628;
+  border-radius: 5px; padding: 7px 9px; line-height: 1.6; margin-bottom: 16px;
+}
+.modal-hint code { color: #e94560; font-family: monospace; }
+.modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
 </style>
 </head>
 <body>
@@ -362,11 +425,104 @@ canvas { display: block; image-rendering: pixelated; }
       <input type="number" id="mz-count" value="4" min="1" max="32" class="inp-sm">
     </div>
     <div id="mz-list"></div>
-  </div>
 
-  <!-- ============================================================
-       TEXT OVERLAY  (always visible)
-       ============================================================ -->
+    <!-- ── BORDER PICKER ── -->
+    <div class="bp-divider">
+      <div class="bp-sub-title">Cell Borders</div>
+
+      <!-- 6 preset icon buttons -->
+      <div class="bp-presets">
+        <!-- None -->
+        <button class="bp-btn" id="bpb-none" title="No Borders" onclick="setBorderPreset('none')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#0a1628" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/></svg>
+        </button>
+        <!-- Outside -->
+        <button class="bp-btn" id="bpb-outside" title="Outside Box" onclick="setBorderPreset('outside')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#0a1628" stroke="#e94560" stroke-width="2"/><line x1="2" y1="11" x2="20" y2="11" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/></svg>
+        </button>
+        <!-- All -->
+        <button class="bp-btn" id="bpb-all" title="All Borders" onclick="setBorderPreset('all')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#0a1628" stroke="#e94560" stroke-width="2"/><line x1="2" y1="11" x2="20" y2="11" stroke="#e94560" stroke-width="1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#e94560" stroke-width="1.5"/></svg>
+        </button>
+        <!-- Inner H -->
+        <button class="bp-btn" id="bpb-insideH" title="Inner Horizontal" onclick="setBorderPreset('insideH')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#0a1628" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#e94560" stroke-width="2"/><line x1="11" y1="2" x2="11" y2="20" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/></svg>
+        </button>
+        <!-- Inner V -->
+        <button class="bp-btn" id="bpb-insideV" title="Inner Vertical" onclick="setBorderPreset('insideV')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#0a1628" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#e94560" stroke-width="2"/></svg>
+        </button>
+        <!-- Cross -->
+        <button class="bp-btn" id="bpb-inside" title="Inner Cross" onclick="setBorderPreset('inside')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#0a1628" stroke="#1a3a6a" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#e94560" stroke-width="2"/><line x1="11" y1="2" x2="11" y2="20" stroke="#e94560" stroke-width="2"/></svg>
+        </button>
+      </div>
+
+      <!-- Interactive SVG picker (3×3 grid) -->
+      <div class="bp-canvas-wrap">
+        <svg id="bpSvg" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg">
+          <!-- 9 cell fills -->
+          <rect class="bp-cell" x="20" y="20" width="30" height="30"/>
+          <rect class="bp-cell" x="50" y="20" width="30" height="30"/>
+          <rect class="bp-cell" x="80" y="20" width="30" height="30"/>
+          <rect class="bp-cell" x="20" y="50" width="30" height="30"/>
+          <rect class="bp-cell" x="50" y="50" width="30" height="30"/>
+          <rect class="bp-cell" x="80" y="50" width="30" height="30"/>
+          <rect class="bp-cell" x="20" y="80" width="30" height="30"/>
+          <rect class="bp-cell" x="50" y="80" width="30" height="30"/>
+          <rect class="bp-cell" x="80" y="80" width="30" height="30"/>
+          <!-- Visual lines -->
+          <line id="bpL-top"     class="bp-vis-line" x1="20" y1="20"  x2="110" y2="20"/>
+          <line id="bpL-innerH1" class="bp-vis-line" x1="20" y1="50"  x2="110" y2="50"/>
+          <line id="bpL-innerH2" class="bp-vis-line" x1="20" y1="80"  x2="110" y2="80"/>
+          <line id="bpL-bottom"  class="bp-vis-line" x1="20" y1="110" x2="110" y2="110"/>
+          <line id="bpL-left"    class="bp-vis-line" x1="20" y1="20"  x2="20"  y2="110"/>
+          <line id="bpL-innerV1" class="bp-vis-line" x1="50" y1="20"  x2="50"  y2="110"/>
+          <line id="bpL-innerV2" class="bp-vis-line" x1="80" y1="20"  x2="80"  y2="110"/>
+          <line id="bpL-right"   class="bp-vis-line" x1="110" y1="20" x2="110" y2="110"/>
+          <!-- Edge labels -->
+          <text x="65"  y="13"  text-anchor="middle" font-size="7" fill="#888" font-family="sans-serif">TOP</text>
+          <text x="65"  y="124" text-anchor="middle" font-size="7" fill="#888" font-family="sans-serif">BOTTOM</text>
+          <text x="10"  y="65"  text-anchor="middle" font-size="7" fill="#888" font-family="sans-serif" transform="rotate(-90,10,65)">LEFT</text>
+          <text x="120" y="65"  text-anchor="middle" font-size="7" fill="#888" font-family="sans-serif" transform="rotate(90,120,65)">RIGHT</text>
+          <!-- Hit areas — vertical first (win at corners) -->
+          <rect class="bp-hit" data-b="left"   x="14"  y="20" width="12" height="90"/>
+          <rect class="bp-hit" data-b="innerV" x="44"  y="20" width="12" height="90"/>
+          <rect class="bp-hit" data-b="innerV" x="74"  y="20" width="12" height="90"/>
+          <rect class="bp-hit" data-b="right"  x="104" y="20" width="12" height="90"/>
+          <!-- Horizontal (avoid corner overlap x=14-26 and x=104-116) -->
+          <rect class="bp-hit" data-b="top"    x="26" y="14"  width="78" height="12"/>
+          <rect class="bp-hit" data-b="innerH" x="26" y="44"  width="78" height="12"/>
+          <rect class="bp-hit" data-b="innerH" x="26" y="74"  width="78" height="12"/>
+          <rect class="bp-hit" data-b="bottom" x="26" y="104" width="78" height="12"/>
+        </svg>
+      </div>
+
+      <!-- Toggle label chips -->
+      <div class="bp-labels">
+        <div class="bp-lbl" id="bpl-top"    onclick="toggleBorder('top')">   <span class="bp-lbl-dot"></span>Top</div>
+        <div class="bp-lbl" id="bpl-bottom" onclick="toggleBorder('bottom')"><span class="bp-lbl-dot"></span>Bottom</div>
+        <div class="bp-lbl" id="bpl-left"   onclick="toggleBorder('left')">  <span class="bp-lbl-dot"></span>Left</div>
+        <div class="bp-lbl" id="bpl-right"  onclick="toggleBorder('right')"> <span class="bp-lbl-dot"></span>Right</div>
+        <div class="bp-lbl" id="bpl-innerH" onclick="toggleBorder('innerH')"><span class="bp-lbl-dot"></span>Mid H</div>
+        <div class="bp-lbl" id="bpl-innerV" onclick="toggleBorder('innerV')"><span class="bp-lbl-dot"></span>Mid V</div>
+      </div>
+
+      <!-- Border colour + width -->
+      <div class="row">
+        <span class="lbl">Border col</span>
+        <input type="color" id="mz-bc" value="#e94560" oninput="render()">
+        <span class="lbl" style="flex:0 0 36px;text-align:right">W px</span>
+        <input type="number" id="mz-bw" value="1" min="1" max="10" class="inp-sm" oninput="render()">
+      </div>
+      <div style="font-size:10px;color:#666;margin-top:3px">
+        Mid-H = zone lines when direction is Horizontal.<br>
+        Mid-V = zone lines when direction is Vertical.
+      </div>
+    </div><!-- /bp-divider -->
+  </div><!-- /sec-multi-zone -->
+
+  <!-- TEXT OVERLAY -->
   <div class="section">
     <div class="section-title">
       Text Overlay
@@ -394,6 +550,17 @@ canvas { display: block; image-rendering: pixelated; }
     </div>
   </div>
 
+  <!-- Templates -->
+  <div class="section">
+    <div class="section-title">Templates</div>
+    <div class="tmpl-save-row">
+      <input type="text" id="tmpl-name" placeholder="Template name…"
+             onkeydown="if(event.key==='Enter')saveTemplate()">
+      <button class="btn btn-primary btn-sm" onclick="saveTemplate()">Save</button>
+    </div>
+    <div class="tmpl-list" id="tmpl-list"></div>
+  </div>
+
   <!-- Export -->
   <div class="section">
     <div class="section-title">Export</div>
@@ -413,6 +580,22 @@ canvas { display: block; image-rendering: pixelated; }
   <div id="info-bar">Hover canvas for pixel info</div>
 </div>
 
+<!-- ============================= PNG MODAL ============================= -->
+<div class="modal-backdrop" id="png-modal" style="display:none" onclick="closePngModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <h3>&#128247; Save as PNG</h3>
+    <p>Enter a filename — timestamp is always appended.</p>
+    <input type="text" id="png-filename" placeholder="e.g. pal-test-pattern"
+           onkeydown="if(event.key==='Enter')confirmPng();if(event.key==='Escape')closePngModal()"
+           oninput="updatePngHint(this.value)">
+    <div class="modal-hint" id="png-hint"></div>
+    <div class="modal-btns">
+      <button class="btn btn-secondary btn-sm" onclick="closePngModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmPng()">&#128247; Download</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // DOM shortcuts
@@ -425,6 +608,160 @@ const ctx   = cvs.getContext('2d');
 const ovCtx = ovCvs.getContext('2d');
 
 // ============================================================
+// Timestamp helper
+// ============================================================
+function getTs() {
+  const n = new Date(), p = v => String(v).padStart(2,'0');
+  return `${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}_${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}`;
+}
+
+// ============================================================
+// PNG save modal
+// ============================================================
+function openPngModal() {
+  $('png-filename').value = '';
+  updatePngHint('');
+  $('png-modal').style.display = 'flex';
+  setTimeout(() => $('png-filename').focus(), 40);
+}
+function closePngModal() { $('png-modal').style.display = 'none'; }
+function updatePngHint(raw) {
+  const ts   = getTs();
+  const name = raw.trim() ? `${raw.trim()}_${ts}.png` : `${ts}.png`;
+  $('png-hint').innerHTML = `File: <code>${name}</code>`;
+}
+function confirmPng() {
+  const raw  = $('png-filename').value;
+  const ts   = getTs();
+  const name = raw.trim() ? `${raw.trim()}_${ts}.png` : `${ts}.png`;
+  const a = document.createElement('a');
+  a.href = cvs.toDataURL('image/png');
+  a.download = name;
+  a.click();
+  closePngModal();
+}
+
+// ============================================================
+// Border state
+// ============================================================
+const borderState = {
+  top: false, bottom: false, left: false, right: false,
+  innerH: false, innerV: false,
+};
+const BORDER_LINE_IDS = {
+  top:    ['bpL-top'],
+  bottom: ['bpL-bottom'],
+  left:   ['bpL-left'],
+  right:  ['bpL-right'],
+  innerH: ['bpL-innerH1','bpL-innerH2'],
+  innerV: ['bpL-innerV1','bpL-innerV2'],
+};
+const PRESET_SIGS = {
+  none:    [false,false,false,false,false,false],
+  outside: [true, true, true, true, false,false],
+  all:     [true, true, true, true, true, true ],
+  insideH: [false,false,false,false,true, false],
+  insideV: [false,false,false,false,false,true ],
+  inside:  [false,false,false,false,true, true ],
+};
+const BORDER_KEYS = ['top','bottom','left','right','innerH','innerV'];
+
+function matchPreset() {
+  const vec = BORDER_KEYS.map(k => borderState[k]);
+  for (const [name, sig] of Object.entries(PRESET_SIGS)) {
+    if (sig.every((v,i) => v === vec[i])) return name;
+  }
+  return null;
+}
+
+function toggleBorder(name) {
+  borderState[name] = !borderState[name];
+  updateBorderSVG();
+  render();
+}
+
+function setBorderPreset(name) {
+  const presets = {
+    none:    {top:false,bottom:false,left:false,right:false,innerH:false,innerV:false},
+    all:     {top:true, bottom:true, left:true, right:true, innerH:true, innerV:true },
+    outside: {top:true, bottom:true, left:true, right:true, innerH:false,innerV:false},
+    inside:  {top:false,bottom:false,left:false,right:false,innerH:true, innerV:true },
+    insideH: {top:false,bottom:false,left:false,right:false,innerH:true, innerV:false},
+    insideV: {top:false,bottom:false,left:false,right:false,innerH:false,innerV:true },
+  };
+  if (presets[name]) { Object.assign(borderState, presets[name]); updateBorderSVG(); render(); }
+}
+
+function updateBorderSVG() {
+  // Cell fill
+  document.querySelectorAll('#bpSvg .bp-cell').forEach(el => el.setAttribute('fill','#0a1628'));
+  // Lines
+  for (const [key, ids] of Object.entries(BORDER_LINE_IDS)) {
+    const on2 = borderState[key];
+    ids.forEach(id => {
+      const el = $(id); if (!el) return;
+      el.classList.toggle('bp-on', on2);
+      if (on2) el.setAttribute('stroke', $('mz-bc').value);
+      else     el.removeAttribute('stroke');
+    });
+  }
+  // Label chips
+  BORDER_KEYS.forEach(k => {
+    const el = $('bpl-' + k); if (el) el.classList.toggle('on', borderState[k]);
+  });
+  // Preset button highlight
+  const matched = matchPreset();
+  document.querySelectorAll('.bp-btn').forEach(b => b.classList.remove('active'));
+  if (matched) { const el = $('bpb-' + matched); if (el) el.classList.add('active'); }
+}
+
+function initBorderPicker() {
+  document.querySelectorAll('#bpSvg .bp-hit').forEach(el => {
+    el.addEventListener('click', () => toggleBorder(el.dataset.b));
+  });
+  updateBorderSVG();
+}
+
+// Draw borders on canvas (called after putImageData, before text overlay)
+function drawMultiZoneBorders(w, h) {
+  const bw  = Math.max(1, +$('mz-bw').value);
+  const bc  = $('mz-bc').value;
+  const dir = $('mz-dir').value;
+  const half = bw % 2 === 1 ? 0.5 : 0;
+  const any = Object.values(borderState).some(Boolean);
+  if (!any) return;
+
+  ctx.save();
+  ctx.strokeStyle = bc;
+  ctx.lineWidth   = bw;
+  ctx.lineCap     = 'square';
+  ctx.beginPath();
+
+  if (borderState.top)    { ctx.moveTo(0,    half);   ctx.lineTo(w,    half); }
+  if (borderState.bottom) { ctx.moveTo(0,    h-half); ctx.lineTo(w,    h-half); }
+  if (borderState.left)   { ctx.moveTo(half, 0);      ctx.lineTo(half, h); }
+  if (borderState.right)  { ctx.moveTo(w-half, 0);    ctx.lineTo(w-half, h); }
+
+  // Zone boundary lines
+  if (borderState.innerV && dir === 'v') {
+    let pos = 0;
+    for (const z of getMultiZones().slice(0,-1)) {
+      pos += z.sz;
+      if (pos > 0 && pos < w) { const x = pos+half; ctx.moveTo(x,0); ctx.lineTo(x,h); }
+    }
+  }
+  if (borderState.innerH && dir === 'h') {
+    let pos = 0;
+    for (const z of getMultiZones().slice(0,-1)) {
+      pos += z.sz;
+      if (pos > 0 && pos < h) { const y = pos+half; ctx.moveTo(0,y); ctx.lineTo(w,y); }
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
 // Colour utilities
 // ============================================================
 function hexToRgb(hex) {
@@ -435,7 +772,7 @@ function lerpColor(a, b, t) {
   return [
     Math.round(a[0]+(b[0]-a[0])*t),
     Math.round(a[1]+(b[1]-a[1])*t),
-    Math.round(a[2]+(b[2]-a[2])*t)
+    Math.round(a[2]+(b[2]-a[2])*t),
   ];
 }
 function applyBri(c, bri) {
@@ -443,42 +780,27 @@ function applyBri(c, bri) {
 }
 
 // ============================================================
-// Pattern fill helpers (operate directly on Uint8ClampedArray)
+// Pixel helpers
 // ============================================================
 function setPixel(d, w, x, y, r, g, b) {
-  const i = (y*w+x)*4;
-  d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
+  const i = (y*w+x)*4; d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255;
 }
 
-// Fill a rectangular region with a pattern
-// pat: 'solid_white'|'solid_black'|'v_stripes'|'h_stripes'|'checker'|'v_grad'|'h_grad'
-// x0,y0 = top-left of region on full canvas; rw,rh = region size (local)
 function fillRegion(d, canvasW, x0, y0, rw, rh, pat, fg, bg, sw) {
-  for (let ly = 0; ly < rh; ly++) {
-    const y = y0 + ly;
-    if (y < 0) continue;
-    for (let lx = 0; lx < rw; lx++) {
-      const x = x0 + lx;
-      if (x < 0) continue;
+  for (let ly=0; ly<rh; ly++) {
+    const y = y0+ly; if (y<0) continue;
+    for (let lx=0; lx<rw; lx++) {
+      const x = x0+lx; if (x<0) continue;
       let c;
       switch (pat) {
-        case 'solid_white': c = fg; break;
-        case 'solid_black': c = bg; break;
-        case 'v_stripes':
-          c = (Math.floor(lx/sw) % 2 === 0) ? fg : bg; break;
-        case 'h_stripes':
-          c = (Math.floor(ly/sw) % 2 === 0) ? fg : bg; break;
-        case 'checker':
-          c = ((Math.floor(lx/sw)+Math.floor(ly/sw)) % 2 === 0) ? fg : bg; break;
-        case 'v_grad': {
-          const t = rw > 1 ? lx/(rw-1) : 0;
-          c = lerpColor(bg, fg, t); break;
-        }
-        case 'h_grad': {
-          const t = rh > 1 ? ly/(rh-1) : 0;
-          c = lerpColor(bg, fg, t); break;
-        }
-        default: c = bg;
+        case 'solid_white': c=fg; break;
+        case 'solid_black': c=bg; break;
+        case 'v_stripes':  c=(Math.floor(lx/sw)%2===0)?fg:bg; break;
+        case 'h_stripes':  c=(Math.floor(ly/sw)%2===0)?fg:bg; break;
+        case 'checker':    c=((Math.floor(lx/sw)+Math.floor(ly/sw))%2===0)?fg:bg; break;
+        case 'v_grad': { const t=rw>1?lx/(rw-1):0; c=lerpColor(bg,fg,t); break; }
+        case 'h_grad': { const t=rh>1?ly/(rh-1):0; c=lerpColor(bg,fg,t); break; }
+        default: c=bg;
       }
       setPixel(d, canvasW, x, y, c[0], c[1], c[2]);
     }
@@ -486,173 +808,90 @@ function fillRegion(d, canvasW, x0, y0, rw, rh, pat, fg, bg, sw) {
 }
 
 // ============================================================
-// Main pattern fill dispatcher
+// Main pattern dispatcher
 // ============================================================
 function fillPattern(d, w, h) {
-  const bri  = +$('brightness').value / 255;
-  const fgR  = applyBri(hexToRgb($('col-fg').value), bri);
-  const bgR  = applyBri(hexToRgb($('col-bg').value), bri);
-  const pat  = $('pat-type').value;
+  const bri = +$('brightness').value/255;
+  const fgR = applyBri(hexToRgb($('col-fg').value), bri);
+  const bgR = applyBri(hexToRgb($('col-bg').value), bri);
+  const pat = $('pat-type').value;
 
   switch (pat) {
-    case 'solid_white':
-      fillRegion(d,w,0,0,w,h,'solid_white',fgR,bgR,1); break;
-
-    case 'solid_black':
-      fillRegion(d,w,0,0,w,h,'solid_black',fgR,bgR,1); break;
-
-    case 'v_stripes':
-      fillRegion(d,w,0,0,w,h,'v_stripes',fgR,bgR,+$('stripe-w').value||4); break;
-
-    case 'h_stripes':
-      fillRegion(d,w,0,0,w,h,'h_stripes',fgR,bgR,+$('stripe-w').value||4); break;
-
-    case 'checkerboard':
-      fillRegion(d,w,0,0,w,h,'checker',fgR,bgR,
-        Math.max(1,+$('check-w').value)); break;
-
+    case 'solid_white':  fillRegion(d,w,0,0,w,h,'solid_white',fgR,bgR,1); break;
+    case 'solid_black':  fillRegion(d,w,0,0,w,h,'solid_black',fgR,bgR,1); break;
+    case 'v_stripes':    fillRegion(d,w,0,0,w,h,'v_stripes',fgR,bgR,+$('stripe-w').value||4); break;
+    case 'h_stripes':    fillRegion(d,w,0,0,w,h,'h_stripes',fgR,bgR,+$('stripe-w').value||4); break;
+    case 'checkerboard': fillRegion(d,w,0,0,w,h,'checker',fgR,bgR,Math.max(1,+$('check-w').value)); break;
     case 'v_gradient': {
-      const steps = Math.max(2,+$('grad-steps').value);
-      const sw2 = Math.ceil(w/steps);
-      for (let s=0; s<steps; s++) {
-        const t = s/(steps-1);
-        const c = lerpColor(bgR, fgR, t);
-        fillRegion(d,w,s*sw2,0,sw2,h,'solid_white',c,c,1);
-      }
+      const steps=Math.max(2,+$('grad-steps').value), sw2=Math.ceil(w/steps);
+      for (let s=0;s<steps;s++) { const t=s/(steps-1); const c=lerpColor(bgR,fgR,t); fillRegion(d,w,s*sw2,0,sw2,h,'solid_white',c,c,1); }
       break;
     }
     case 'h_gradient': {
-      const steps = Math.max(2,+$('grad-steps').value);
-      const sh2 = Math.ceil(h/steps);
-      for (let s=0; s<steps; s++) {
-        const t = s/(steps-1);
-        const c = lerpColor(bgR, fgR, t);
-        fillRegion(d,w,0,s*sh2,w,sh2,'solid_white',c,c,1);
-      }
+      const steps=Math.max(2,+$('grad-steps').value), sh2=Math.ceil(h/steps);
+      for (let s=0;s<steps;s++) { const t=s/(steps-1); const c=lerpColor(bgR,fgR,t); fillRegion(d,w,0,s*sh2,w,sh2,'solid_white',c,c,1); }
       break;
     }
     case 'crosshatch': {
-      const ch = Math.max(1,+$('cross-h').value);
-      const cv = Math.max(1,+$('cross-v').value);
-      const lw = Math.max(1,+$('cross-lw').value);
-      for (let y=0; y<h; y++) {
-        for (let x=0; x<w; x++) {
-          const on = (x%ch)<lw || (y%cv)<lw;
-          const c  = on ? fgR : bgR;
-          setPixel(d,w,x,y,c[0],c[1],c[2]);
-        }
-      }
+      const ch=Math.max(1,+$('cross-h').value), cv=Math.max(1,+$('cross-v').value), lw=Math.max(1,+$('cross-lw').value);
+      for (let y=0;y<h;y++) for (let x=0;x<w;x++) { const on2=(x%ch)<lw||(y%cv)<lw; const c=on2?fgR:bgR; setPixel(d,w,x,y,c[0],c[1],c[2]); }
       break;
     }
     case 'centre_cross': {
-      const cx = Math.floor(w/2), cy = Math.floor(h/2);
-      for (let y=0; y<h; y++) {
-        for (let x=0; x<w; x++) {
-          const c = (x===cx||y===cy) ? fgR : bgR;
-          setPixel(d,w,x,y,c[0],c[1],c[2]);
-        }
-      }
+      const cx=Math.floor(w/2), cy=Math.floor(h/2);
+      for (let y=0;y<h;y++) for (let x=0;x<w;x++) { const c=(x===cx||y===cy)?fgR:bgR; setPixel(d,w,x,y,c[0],c[1],c[2]); }
       break;
     }
     case 'circle': {
-      const cx = +$('circ-cx').value, cy = +$('circ-cy').value;
-      const rx = Math.max(1,+$('circ-rx').value);
-      const ry = Math.max(1,+$('circ-ry').value);
-      const fill = $('circ-fill').checked;
-      for (let y=0; y<h; y++) {
-        for (let x=0; x<w; x++) {
-          const d2 = ((x-cx)/rx)**2 + ((y-cy)/ry)**2;
-          const on = fill ? d2<=1 : Math.abs(d2-1) < 2/Math.min(rx,ry);
-          const c  = on ? fgR : bgR;
-          setPixel(d,w,x,y,c[0],c[1],c[2]);
-        }
-      }
+      const cx=+$('circ-cx').value, cy=+$('circ-cy').value;
+      const rx=Math.max(1,+$('circ-rx').value), ry=Math.max(1,+$('circ-ry').value);
+      const fill=$('circ-fill').checked;
+      for (let y=0;y<h;y++) for (let x=0;x<w;x++) { const d2=((x-cx)/rx)**2+((y-cy)/ry)**2; const on2=fill?d2<=1:Math.abs(d2-1)<2/Math.min(rx,ry); const c=on2?fgR:bgR; setPixel(d,w,x,y,c[0],c[1],c[2]); }
       break;
     }
     case 'color_zones': {
-      // fill background first
       fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
-      const zones = getColorZones();
-      let xp = 0;
-      for (const z of zones) {
-        const zw = Math.min(z.w, w-xp);
-        if (zw <= 0) break;
-        const zc = applyBri(hexToRgb(z.col), bri);
-        fillRegion(d,w,xp,0,zw,h,'solid_white',zc,zc,1);
-        xp += zw;
-      }
+      let xp=0;
+      for (const z of getColorZones()) { const zw=Math.min(z.w,w-xp); if (zw<=0) break; const zc=applyBri(hexToRgb(z.col),bri); fillRegion(d,w,xp,0,zw,h,'solid_white',zc,zc,1); xp+=zw; }
       break;
     }
     case 'multi_zone': {
       fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
-      const dir  = $('mz-dir').value;
-      const zones = getMultiZones();
-      let pos = 0;
+      const dir=$('mz-dir').value; const zones=getMultiZones(); let pos=0;
       for (const z of zones) {
-        const zfg = applyBri(hexToRgb(z.fg), bri);
-        const zbg = applyBri(hexToRgb(z.bg), bri);
-        const sw2  = Math.max(1, z.sw);
-        if (dir === 'v') {
-          const rw = Math.min(z.sz, w-pos);
-          if (rw <= 0) break;
-          fillRegion(d,w,pos,0,rw,h,z.pat,zfg,zbg,sw2);
-          pos += z.sz;
-        } else {
-          const rh = Math.min(z.sz, h-pos);
-          if (rh <= 0) break;
-          fillRegion(d,w,0,pos,w,rh,z.pat,zfg,zbg,sw2);
-          pos += z.sz;
-        }
+        const zfg=applyBri(hexToRgb(z.fg),bri), zbg=applyBri(hexToRgb(z.bg),bri), sw2=Math.max(1,z.sw);
+        if (dir==='v') { const rw=Math.min(z.sz,w-pos); if (rw<=0) break; fillRegion(d,w,pos,0,rw,h,z.pat,zfg,zbg,sw2); pos+=z.sz; }
+        else           { const rh=Math.min(z.sz,h-pos); if (rh<=0) break; fillRegion(d,w,0,pos,w,rh,z.pat,zfg,zbg,sw2); pos+=z.sz; }
       }
       break;
     }
-    default:
-      fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
+    default: fillRegion(d,w,0,0,w,h,'solid_black',bgR,bgR,1);
   }
 }
 
 // ============================================================
-// Text overlay rendering
+// Text overlay
 // ============================================================
 function drawTextOverlay() {
   if (!$('txt-enable').checked) return;
-  const entries = document.querySelectorAll('.txt-entry');
-  entries.forEach(e => {
-    const text  = e.querySelector('.t-text').value.trim();
-    if (!text) return;
-    const x     = +e.querySelector('.t-x').value || 20;
-    const y     = +e.querySelector('.t-y').value || 40;
-    const sz    = Math.max(6, +e.querySelector('.t-size').value || 24);
-    const col   = e.querySelector('.t-color').value;
-    const bgCol = e.querySelector('.t-bgcol').value;
-    const noBg  = e.querySelector('.t-nobg').checked;
-    const font  = e.querySelector('.t-font').value;
-    const bold  = e.querySelector('.t-bold').checked  ? 'bold '  : '';
-    const ital  = e.querySelector('.t-ital').checked  ? 'italic ' : '';
-    const align = e.querySelector('.t-align').value;
-    const base  = e.querySelector('.t-base').value;
-
+  document.querySelectorAll('.txt-entry').forEach(e => {
+    const text=e.querySelector('.t-text').value.trim(); if (!text) return;
+    const x=+e.querySelector('.t-x').value||20, y=+e.querySelector('.t-y').value||40;
+    const sz=Math.max(6,+e.querySelector('.t-size').value||24);
+    const col=e.querySelector('.t-color').value, bgCol=e.querySelector('.t-bgcol').value;
+    const noBg=e.querySelector('.t-nobg').checked, font=e.querySelector('.t-font').value;
+    const bold=e.querySelector('.t-bold').checked?'bold ':'', ital=e.querySelector('.t-ital').checked?'italic ':'';
+    const align=e.querySelector('.t-align').value, base=e.querySelector('.t-base').value;
     ctx.save();
-    ctx.font         = `${bold}${ital}${sz}px ${font}`;
-    ctx.textAlign    = align;
-    ctx.textBaseline = base;
-    ctx.globalAlpha  = 1;
-
+    ctx.font=`${bold}${ital}${sz}px ${font}`; ctx.textAlign=align; ctx.textBaseline=base;
     if (!noBg) {
-      const m   = ctx.measureText(text);
-      const tw  = m.width;
-      const th  = sz * 1.2;
-      let bx = x, by = y;
-      if (align === 'center') bx = x - tw/2;
-      if (align === 'right')  bx = x - tw;
-      if (base === 'middle')  by = y - th/2;
-      if (base === 'bottom')  by = y - th;
-      ctx.fillStyle = bgCol;
-      ctx.fillRect(bx-3, by-2, tw+6, th+4);
+      const m=ctx.measureText(text), tw=m.width, th=sz*1.2;
+      let bx=x,by=y;
+      if (align==='center') bx=x-tw/2; if (align==='right') bx=x-tw;
+      if (base==='middle')  by=y-th/2; if (base==='bottom')  by=y-th;
+      ctx.fillStyle=bgCol; ctx.fillRect(bx-3,by-2,tw+6,th+4);
     }
-    ctx.fillStyle = col;
-    ctx.fillText(text, x, y);
-    ctx.restore();
+    ctx.fillStyle=col; ctx.fillText(text,x,y); ctx.restore();
   });
 }
 
@@ -661,105 +900,98 @@ function drawTextOverlay() {
 // ============================================================
 let txtCounter = 0;
 
-function addTextEntry(text='Text', x=20, y=40, sz=32) {
+function addTextEntry(text='Text', x=20, y=40, sz=32, extra={}) {
   const id = ++txtCounter;
   const div = document.createElement('div');
-  div.className = 'txt-entry';
-  div.dataset.id = id;
+  div.className = 'txt-entry'; div.dataset.id = id;
   div.innerHTML = `
     <div class="txt-entry-head">
-      <input type="text" class="t-text" placeholder="Enter text…" value="${text}">
+      <input type="text" class="t-text" placeholder="Enter text…" value="${text.replace(/"/g,'&quot;')}">
       <button class="btn btn-sm btn-danger t-remove" title="Remove">&#10005;</button>
     </div>
     <div class="txt-grid">
-      <div class="row"><span class="lbl">X px</span>
-        <input type="number" class="t-x inp-sm" value="${x}"></div>
-      <div class="row"><span class="lbl">Y px</span>
-        <input type="number" class="t-y inp-sm" value="${y}"></div>
-      <div class="row"><span class="lbl">Size</span>
-        <input type="number" class="t-size inp-sm" value="${sz}" min="6" max="512"></div>
-      <div class="row"><span class="lbl">Colour</span>
-        <input type="color" class="t-color" value="#ffffff"></div>
+      <div class="row"><span class="lbl">X px</span><input type="number" class="t-x inp-sm" value="${x}"></div>
+      <div class="row"><span class="lbl">Y px</span><input type="number" class="t-y inp-sm" value="${y}"></div>
+      <div class="row"><span class="lbl">Size</span><input type="number" class="t-size inp-sm" value="${sz}" min="6" max="512"></div>
+      <div class="row"><span class="lbl">Colour</span><input type="color" class="t-color" value="${extra.col||'#ffffff'}"></div>
     </div>
     <div class="row" style="margin-top:4px">
       <span class="lbl">BG Col</span>
-      <input type="color" class="t-bgcol" value="#000000">
-      <input type="checkbox" class="t-nobg" checked>
+      <input type="color" class="t-bgcol" value="${extra.bgcol||'#000000'}">
+      <input type="checkbox" class="t-nobg" ${(extra.nobg!==false)?'checked':''}>
       <span style="font-size:11px;color:#aaa">No BG</span>
     </div>
     <div class="row" style="margin-top:4px">
       <span class="lbl">Font</span>
       <select class="t-font">
-        <option>monospace</option>
-        <option>sans-serif</option>
-        <option>serif</option>
-        <option>Arial</option>
-        <option>Courier New</option>
-        <option>Impact</option>
+        <option>monospace</option><option>sans-serif</option><option>serif</option>
+        <option>Arial</option><option>Courier New</option><option>Impact</option>
       </select>
     </div>
     <div class="row" style="margin-top:4px">
       <span class="lbl">Style</span>
-      <input type="checkbox" class="t-bold">
-      <span style="font-size:11px;color:#aaa">Bold</span>
-      <input type="checkbox" class="t-ital" style="margin-left:6px">
-      <span style="font-size:11px;color:#aaa">Italic</span>
+      <input type="checkbox" class="t-bold"><span style="font-size:11px;color:#aaa">Bold</span>
+      <input type="checkbox" class="t-ital" style="margin-left:6px"><span style="font-size:11px;color:#aaa">Italic</span>
     </div>
     <div class="row" style="margin-top:4px">
       <span class="lbl">Align</span>
-      <select class="t-align">
-        <option value="left" selected>Left</option>
-        <option value="center">Centre</option>
-        <option value="right">Right</option>
-      </select>
-      <select class="t-base" style="margin-left:4px">
-        <option value="alphabetic" selected>Baseline</option>
-        <option value="top">Top</option>
-        <option value="middle">Middle</option>
-        <option value="bottom">Bottom</option>
-      </select>
+      <select class="t-align"><option value="left" selected>Left</option><option value="center">Centre</option><option value="right">Right</option></select>
+      <select class="t-base" style="margin-left:4px"><option value="alphabetic" selected>Baseline</option><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select>
     </div>`;
   $('txt-list').appendChild(div);
-
-  // Wire events inside this entry
-  div.querySelectorAll('input, select').forEach(el => on(el,'input', render));
-  div.querySelector('.t-remove').addEventListener('click', () => {
-    div.remove(); render();
-  });
+  // Restore extra fields
+  if (extra.font)  div.querySelector('.t-font').value  = extra.font;
+  if (extra.bold !== undefined) div.querySelector('.t-bold').checked = extra.bold;
+  if (extra.ital !== undefined) div.querySelector('.t-ital').checked = extra.ital;
+  if (extra.align) div.querySelector('.t-align').value = extra.align;
+  if (extra.base)  div.querySelector('.t-base').value  = extra.base;
+  div.querySelectorAll('input,select').forEach(el => on(el,'input',render));
+  div.querySelector('.t-remove').addEventListener('click',() => { div.remove(); render(); });
   render();
 }
 
+function getTextEntries() {
+  return Array.from(document.querySelectorAll('.txt-entry')).map(e => ({
+    text:  e.querySelector('.t-text').value,
+    x:     +e.querySelector('.t-x').value,
+    y:     +e.querySelector('.t-y').value,
+    sz:    +e.querySelector('.t-size').value,
+    col:   e.querySelector('.t-color').value,
+    bgcol: e.querySelector('.t-bgcol').value,
+    nobg:  e.querySelector('.t-nobg').checked,
+    font:  e.querySelector('.t-font').value,
+    bold:  e.querySelector('.t-bold').checked,
+    ital:  e.querySelector('.t-ital').checked,
+    align: e.querySelector('.t-align').value,
+    base:  e.querySelector('.t-base').value,
+  }));
+}
+
 // ============================================================
-// Colour zone management (simple colour zones)
+// Colour zone management
 // ============================================================
 const CZ_DEFAULTS = [
-  '#ffffff','#dddddd','#bbbbbb','#999999',
-  '#777777','#555555','#333333','#111111',
-  '#ffffff','#aaaaaa','#555555','#000000',
-  '#eeeeee','#888888','#222222','#cccccc',
-  '#666666','#0f0f0f','#f0f0f0','#505050',
-  '#303030','#c0c0c0','#707070','#e0e0e0',
-  '#404040','#b0b0b0','#808080','#202020',
-  '#909090','#101010','#f8f8f8','#080808',
+  '#ffffff','#dddddd','#bbbbbb','#999999','#777777','#555555','#333333','#111111',
+  '#ffffff','#aaaaaa','#555555','#000000','#eeeeee','#888888','#222222','#cccccc',
+  '#666666','#0f0f0f','#f0f0f0','#505050','#303030','#c0c0c0','#707070','#e0e0e0',
+  '#404040','#b0b0b0','#808080','#202020','#909090','#101010','#f8f8f8','#080808',
 ];
 
-function buildColorZoneList() {
+function buildColorZoneList(saved) {
   const count = Math.max(1, Math.min(32, +$('cz-count').value));
-  const w     = +$('cvs-w').value;
-  const dw    = Math.floor(w / count);
-  const list  = $('cz-list');
-  list.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.innerHTML = `
-      <span class="lbl" style="font-size:11px">Zone ${i+1}</span>
-      <input type="color" class="cz-col" value="${CZ_DEFAULTS[i % CZ_DEFAULTS.length]}">
-      <input type="number" class="cz-w inp-sm" value="${dw}" min="1" max="1920">
+  const w = +$('cvs-w').value, dw = Math.floor(w/count);
+  const list = $('cz-list'); list.innerHTML = '';
+  for (let i=0; i<count; i++) {
+    const row = document.createElement('div'); row.className='row';
+    const col = saved?.[i]?.col ?? CZ_DEFAULTS[i % CZ_DEFAULTS.length];
+    const ww  = saved?.[i]?.w  ?? dw;
+    row.innerHTML=`<span class="lbl" style="font-size:11px">Zone ${i+1}</span>
+      <input type="color" class="cz-col" value="${col}">
+      <input type="number" class="cz-w inp-sm" value="${ww}" min="1" max="1920">
       <span style="font-size:11px;color:#888">px</span>`;
     list.appendChild(row);
   }
-  list.querySelectorAll('input').forEach(el => on(el,'input', render));
+  list.querySelectorAll('input').forEach(el => on(el,'input',render));
 }
 
 function getColorZones() {
@@ -773,44 +1005,39 @@ function getColorZones() {
 // Multi-zone management
 // ============================================================
 const MZ_PATTERNS = [
-  { val:'solid_white', lbl:'Solid White'         },
-  { val:'solid_black', lbl:'Solid Black'         },
-  { val:'v_stripes',   lbl:'Alt B/W - Vertical'  },
-  { val:'h_stripes',   lbl:'Alt B/W - Horizontal'},
-  { val:'checker',     lbl:'Checkerboard'        },
-  { val:'v_grad',      lbl:'Gradient (L→R)'      },
-  { val:'h_grad',      lbl:'Gradient (T→B)'      },
+  {val:'solid_white',lbl:'Solid White'},     {val:'solid_black',lbl:'Solid Black'},
+  {val:'v_stripes',  lbl:'Alt B/W - Vertical'},{val:'h_stripes',lbl:'Alt B/W - Horizontal'},
+  {val:'checker',    lbl:'Checkerboard'},    {val:'v_grad',lbl:'Gradient (L→R)'},
+  {val:'h_grad',     lbl:'Gradient (T→B)'},
 ];
 
-function buildMultiZoneList() {
+function buildMultiZoneList(saved) {
   const count = Math.max(1, Math.min(32, +$('mz-count').value));
   const dir   = $('mz-dir').value;
-  const total = dir === 'v' ? +$('cvs-w').value : +$('cvs-h').value;
-  const dz    = Math.floor(total / count);
-  const list  = $('mz-list');
-  list.innerHTML = '';
-  const opts  = MZ_PATTERNS.map(p =>
-    `<option value="${p.val}">${p.lbl}</option>`).join('');
-
-  for (let i = 0; i < count; i++) {
-    const div = document.createElement('div');
-    div.className = 'mz-entry';
-    div.innerHTML = `
+  const total = dir==='v' ? +$('cvs-w').value : +$('cvs-h').value;
+  const dz    = Math.floor(total/count);
+  const list  = $('mz-list'); list.innerHTML='';
+  const opts  = MZ_PATTERNS.map(p=>`<option value="${p.val}">${p.lbl}</option>`).join('');
+  for (let i=0; i<count; i++) {
+    const sv  = saved?.[i];
+    const div = document.createElement('div'); div.className='mz-entry';
+    div.innerHTML=`
       <div class="mz-row1">
         <span class="mz-label">Zone ${i+1}</span>
         <select class="mz-pat" style="flex:1">${opts}</select>
       </div>
       <div class="mz-row2">
         <span style="font-size:10.5px;color:#aaa;flex:0 0 44px">Size px</span>
-        <input type="number" class="mz-sz inp-sm" value="${dz}" min="1" max="2000">
+        <input type="number" class="mz-sz inp-sm" value="${sv?.sz??dz}" min="1" max="2000">
         <span style="font-size:10.5px;color:#aaa;margin-left:4px">SW</span>
-        <input type="number" class="mz-sw inp-sm" value="4" min="1" max="512">
-        <input type="color" class="mz-fg" value="#ffffff" title="Foreground">
-        <input type="color" class="mz-bg" value="#000000" title="Background">
+        <input type="number" class="mz-sw inp-sm" value="${sv?.sw??4}" min="1" max="512">
+        <input type="color" class="mz-fg" value="${sv?.fg??'#ffffff'}" title="Foreground">
+        <input type="color" class="mz-bg" value="${sv?.bg??'#000000'}" title="Background">
       </div>`;
     list.appendChild(div);
+    if (sv?.pat) div.querySelector('.mz-pat').value = sv.pat;
   }
-  list.querySelectorAll('input, select').forEach(el => on(el,'input', render));
+  list.querySelectorAll('input,select').forEach(el => on(el,'input',render));
 }
 
 function getMultiZones() {
@@ -827,24 +1054,18 @@ function getMultiZones() {
 // PAL guide overlay
 // ============================================================
 function drawPalOverlay(w, h) {
-  ovCtx.clearRect(0, 0, w, h);
+  ovCtx.clearRect(0,0,w,h);
   if (!$('pal-overlay').checked) return;
   ovCtx.save();
-  ovCtx.strokeStyle = 'rgba(233,69,96,0.55)';
-  ovCtx.lineWidth   = 1;
-  ovCtx.setLineDash([4,3]);
+  ovCtx.strokeStyle='rgba(233,69,96,0.55)'; ovCtx.lineWidth=1; ovCtx.setLineDash([4,3]);
   ovCtx.beginPath();
   ovCtx.moveTo(w/2,0); ovCtx.lineTo(w/2,h);
   ovCtx.moveTo(0,h/2); ovCtx.lineTo(w,h/2);
   ovCtx.stroke();
-  const m = 18;
-  ovCtx.setLineDash([]);
-  ovCtx.strokeStyle = 'rgba(233,69,96,0.75)';
+  const m=18; ovCtx.setLineDash([]); ovCtx.strokeStyle='rgba(233,69,96,0.75)';
   [[0,0],[w,0],[0,h],[w,h]].forEach(([cx,cy]) => {
-    const sx = cx===0?1:-1, sy = cy===0?1:-1;
-    ovCtx.beginPath();
-    ovCtx.moveTo(cx,cy+sy*m); ovCtx.lineTo(cx,cy); ovCtx.lineTo(cx+sx*m,cy);
-    ovCtx.stroke();
+    const sx=cx===0?1:-1, sy=cy===0?1:-1;
+    ovCtx.beginPath(); ovCtx.moveTo(cx,cy+sy*m); ovCtx.lineTo(cx,cy); ovCtx.lineTo(cx+sx*m,cy); ovCtx.stroke();
   });
   ovCtx.restore();
 }
@@ -853,25 +1074,19 @@ function drawPalOverlay(w, h) {
 // Section visibility
 // ============================================================
 const SEC_MAP = {
-  solid_white:  [],
-  solid_black:  [],
-  v_stripes:    ['sec-stripes'],
-  h_stripes:    ['sec-stripes'],
-  checkerboard: ['sec-checker'],
-  v_gradient:   ['sec-gradient'],
-  h_gradient:   ['sec-gradient'],
-  crosshatch:   ['sec-crosshatch'],
-  centre_cross: [],
-  circle:       ['sec-circle'],
-  color_zones:  ['sec-color-zones'],
-  multi_zone:   ['sec-multi-zone'],
+  solid_white:'',solid_black:'',
+  v_stripes:'sec-stripes',h_stripes:'sec-stripes',
+  checkerboard:'sec-checker', v_gradient:'sec-gradient',h_gradient:'sec-gradient',
+  crosshatch:'sec-crosshatch', centre_cross:'',circle:'sec-circle',
+  color_zones:'sec-color-zones', multi_zone:'sec-multi-zone',
 };
-const ALL_SECS = ['sec-stripes','sec-checker','sec-gradient','sec-crosshatch',
-                  'sec-circle','sec-color-zones','sec-multi-zone'];
+const ALL_SECS=['sec-stripes','sec-checker','sec-gradient','sec-crosshatch',
+                'sec-circle','sec-color-zones','sec-multi-zone'];
 
 function updateSections() {
   ALL_SECS.forEach(id => $(id).classList.add('hidden'));
-  (SEC_MAP[$('pat-type').value] || []).forEach(id => $(id).classList.remove('hidden'));
+  const sec = SEC_MAP[$('pat-type').value];
+  if (sec) $(sec).classList.remove('hidden');
   render();
 }
 
@@ -881,99 +1096,161 @@ function updateSections() {
 function render() {
   const w = Math.max(1, Math.min(1920, +$('cvs-w').value));
   const h = Math.max(1, Math.min(1080, +$('cvs-h').value));
+  cvs.width=w; cvs.height=h; ovCvs.width=w; ovCvs.height=h;
+  const maxW=$('canvas-area').clientWidth-20, maxH=$('canvas-area').clientHeight-50;
+  const scale=Math.min(1,maxW/w,maxH/h);
+  const sw=Math.round(w*scale)+'px', sh=Math.round(h*scale)+'px';
+  cvs.style.width=sw; cvs.style.height=sh; ovCvs.style.width=sw; ovCvs.style.height=sh;
 
-  cvs.width  = w;  cvs.height  = h;
-  ovCvs.width = w; ovCvs.height = h;
-
-  // Scale to fit
-  const maxW  = $('canvas-area').clientWidth  - 20;
-  const maxH  = $('canvas-area').clientHeight - 50;
-  const scale = Math.min(1, maxW/w, maxH/h);
-  const sw = Math.round(w*scale)+'px', sh = Math.round(h*scale)+'px';
-  cvs.style.width  = sw; cvs.style.height  = sh;
-  ovCvs.style.width = sw; ovCvs.style.height = sh;
-
-  // 1. Fill main pattern
-  const img = ctx.createImageData(w, h);
+  const img=ctx.createImageData(w,h);
   fillPattern(img.data, w, h);
   ctx.putImageData(img, 0, 0);
 
-  // 2. Text overlay (drawn on main canvas so it's baked into exports)
+  // Multi-zone borders on top of fill, under text
+  if ($('pat-type').value === 'multi_zone') drawMultiZoneBorders(w, h);
+
   drawTextOverlay();
-
-  // 3. PAL guide (separate overlay canvas)
   drawPalOverlay(w, h);
-
   updateInfoBar(w, h);
 }
 
 function updateInfoBar(w, h) {
-  const px    = w*h;
-  const bytes = Math.ceil(px/8);
-  $('info-bar').textContent =
-    `${w} × ${h}  |  ${px.toLocaleString()} px  |  BRAM: ${bytes.toLocaleString()} bytes (${(bytes/1024).toFixed(1)} KB)`;
-  $('export-info').textContent =
-    `1-bit: ${bytes.toLocaleString()} bytes · MSB-first · row stride ${w} px`;
+  const px=w*h, bytes=Math.ceil(px/8);
+  $('info-bar').textContent=`${w} × ${h}  |  ${px.toLocaleString()} px  |  BRAM: ${bytes.toLocaleString()} bytes (${(bytes/1024).toFixed(1)} KB)`;
+  $('export-info').textContent=`1-bit: ${bytes.toLocaleString()} bytes · MSB-first · row stride ${w} px`;
 }
 
 // ============================================================
-// Export — PNG
+// Template management
 // ============================================================
-on($('btn-png'),'click', () => {
-  const a = document.createElement('a');
-  a.href     = cvs.toDataURL('image/png');
-  a.download = `bram_${cvs.width}x${cvs.height}.png`;
-  a.click();
-});
+const LS_KEY = 'bram_patgen_v2_templates';
+function loadTemplates()    { try { return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); } catch { return []; } }
+function storeTemplates(a)  { localStorage.setItem(LS_KEY, JSON.stringify(a)); }
+
+function getTemplateState() {
+  return {
+    cvs_w:+$('cvs-w').value, cvs_h:+$('cvs-h').value,
+    col_fg:$('col-fg').value, col_bg:$('col-bg').value,
+    pat:$('pat-type').value,
+    stripe_w:+$('stripe-w').value,
+    check_w:+$('check-w').value, check_h:+$('check-h').value,
+    grad_steps:+$('grad-steps').value,
+    cross_h:+$('cross-h').value, cross_v:+$('cross-v').value, cross_lw:+$('cross-lw').value,
+    circ_cx:+$('circ-cx').value, circ_cy:+$('circ-cy').value,
+    circ_rx:+$('circ-rx').value, circ_ry:+$('circ-ry').value,
+    circ_fill:$('circ-fill').checked,
+    mz_dir:$('mz-dir').value, mz_count:+$('mz-count').value,
+    mz_zones:getMultiZones(), mz_bc:$('mz-bc').value, mz_bw:+$('mz-bw').value,
+    cz_count:+$('cz-count').value, cz_zones:getColorZones(),
+    borders:{...borderState},
+    brightness:+$('brightness').value, threshold:+$('threshold').value,
+    pal_overlay:$('pal-overlay').checked,
+    txt_enable:$('txt-enable').checked, txt_entries:getTextEntries(),
+  };
+}
+
+function applyTemplateState(s) {
+  $('cvs-w').value=s.cvs_w??520;  $('cvs-h').value=s.cvs_h??576;
+  $('col-fg').value=s.col_fg??'#ffffff';  $('col-bg').value=s.col_bg??'#000000';
+  $('pat-type').value=s.pat??'v_stripes';
+  if (s.stripe_w) $('stripe-w').value=s.stripe_w;
+  if (s.check_w)  $('check-w').value=s.check_w;
+  if (s.check_h)  $('check-h').value=s.check_h;
+  if (s.grad_steps) $('grad-steps').value=s.grad_steps;
+  if (s.cross_h)  $('cross-h').value=s.cross_h;
+  if (s.cross_v)  $('cross-v').value=s.cross_v;
+  if (s.cross_lw) $('cross-lw').value=s.cross_lw;
+  if (s.circ_cx!==undefined) $('circ-cx').value=s.circ_cx;
+  if (s.circ_cy!==undefined) $('circ-cy').value=s.circ_cy;
+  if (s.circ_rx) $('circ-rx').value=s.circ_rx;
+  if (s.circ_ry) $('circ-ry').value=s.circ_ry;
+  if (s.circ_fill!==undefined) $('circ-fill').checked=s.circ_fill;
+  if (s.mz_dir)   $('mz-dir').value=s.mz_dir;
+  if (s.mz_count) $('mz-count').value=s.mz_count;
+  if (s.mz_bc)    $('mz-bc').value=s.mz_bc;
+  if (s.mz_bw)    $('mz-bw').value=s.mz_bw;
+  if (s.cz_count) $('cz-count').value=s.cz_count;
+  if (s.borders)  Object.assign(borderState, s.borders);
+  if (s.brightness!==undefined) { $('brightness').value=s.brightness; $('brightness-val').textContent=s.brightness; }
+  if (s.threshold!==undefined)  { $('threshold').value=s.threshold;   $('threshold-val').textContent=s.threshold; }
+  if (s.pal_overlay!==undefined) $('pal-overlay').checked=s.pal_overlay;
+  if (s.txt_enable!==undefined)  $('txt-enable').checked=s.txt_enable;
+  buildColorZoneList(s.cz_zones);
+  buildMultiZoneList(s.mz_zones);
+  $('txt-list').innerHTML=''; txtCounter=0;
+  (s.txt_entries||[]).forEach(e => addTextEntry(e.text,e.x,e.y,e.sz,e));
+  updateBorderSVG();
+  updateSections();
+}
+
+function saveTemplate() {
+  const name=$('tmpl-name').value.trim(); if (!name) { $('tmpl-name').focus(); return; }
+  const list=loadTemplates(), idx=list.findIndex(t=>t.name===name);
+  const entry={name, ts:getTs(), pat:$('pat-type').value, state:getTemplateState()};
+  if (idx>=0) list[idx]=entry; else list.push(entry);
+  storeTemplates(list);
+  $('tmpl-name').value='';
+  renderTemplateList();
+}
+function deleteTemplate(name) { storeTemplates(loadTemplates().filter(t=>t.name!==name)); renderTemplateList(); }
+function loadTemplate(name)   { const t=loadTemplates().find(t=>t.name===name); if (t) applyTemplateState(t.state); }
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function renderTemplateList() {
+  const list=loadTemplates(), el=$('tmpl-list');
+  if (!list.length) { el.innerHTML='<div class="no-tmpl">No saved templates yet</div>'; return; }
+  el.innerHTML=list.map(t=>`
+    <div class="tmpl-item">
+      <div class="tmpl-click" onclick="loadTemplate('${esc(t.name)}')">
+        <div class="tmpl-name">${esc(t.name)}</div>
+        <div class="tmpl-meta">${esc(t.pat||'')} &bull; ${t.state?.cvs_w??'?'}&times;${t.state?.cvs_h??'?'} &bull; ${t.ts}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="deleteTemplate('${esc(t.name)}')">&#10005;</button>
+    </div>`).join('');
+}
 
 // ============================================================
 // Export — 1-bit binary
 // ============================================================
 on($('btn-bin'),'click', () => {
-  const w = cvs.width, h = cvs.height;
-  const px  = ctx.getImageData(0, 0, w, h).data;  // reads post-text canvas
-  const thr = +$('threshold').value;
-  const rowB = Math.ceil(w/8);
-  const buf  = new Uint8Array(rowB * h);
-  for (let y=0; y<h; y++) {
-    for (let x=0; x<w; x++) {
-      const i = (y*w+x)*4;
-      const l = 0.299*px[i] + 0.587*px[i+1] + 0.114*px[i+2];
-      if (l >= thr) buf[y*rowB + (x>>3)] |= (0x80 >> (x&7));
-    }
+  const w=cvs.width, h=cvs.height;
+  const px=ctx.getImageData(0,0,w,h).data, thr=+$('threshold').value;
+  const rowB=Math.ceil(w/8), buf=new Uint8Array(rowB*h);
+  for (let y=0;y<h;y++) for (let x=0;x<w;x++) {
+    const i=(y*w+x)*4, l=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+    if (l>=thr) buf[y*rowB+(x>>3)] |= (0x80>>(x&7));
   }
-  const a = document.createElement('a');
-  a.href     = URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
-  a.download = `bram_${w}x${h}.bin`;
+  const a=document.createElement('a');
+  const ts=getTs();
+  a.href=URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
+  a.download=`bram_${w}x${h}_${ts}.bin`;
   a.click();
 });
 
 // ============================================================
-// Export — VHDL snippet to clipboard
+// Export — VHDL snippet
 // ============================================================
 on($('btn-copy-vhd'),'click', () => {
-  const w = cvs.width, h = cvs.height;
-  const px  = ctx.getImageData(0,0,w,h).data;
-  const thr = +$('threshold').value;
-  const rowB = Math.ceil(w/8);
-  const buf  = new Uint8Array(rowB*h);
-  for (let y=0; y<h; y++)
-    for (let x=0; x<w; x++) {
-      const i = (y*w+x)*4;
-      const l = 0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
-      if (l>=thr) buf[y*rowB+(x>>3)] |= (0x80>>(x&7));
-    }
-  const prev = Array.from(buf.slice(0,64))
-    .map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
-  const vhd = [
+  const w=cvs.width, h=cvs.height;
+  const px=ctx.getImageData(0,0,w,h).data, thr=+$('threshold').value;
+  const rowB=Math.ceil(w/8), buf=new Uint8Array(rowB*h);
+  for (let y=0;y<h;y++) for (let x=0;x<w;x++) {
+    const i=(y*w+x)*4, l=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+    if (l>=thr) buf[y*rowB+(x>>3)] |= (0x80>>(x&7));
+  }
+  const prev=Array.from(buf.slice(0,64)).map(b=>b.toString(16).padStart(2,'0').toUpperCase()).join(' ');
+  const vhd=[
     `-- BRAM Pattern: ${w}x${h} px, ${buf.length} bytes`,
     `-- Generated by bram_pattern_gen.html`,
     `-- First 64 bytes (MSB-first hex): ${prev}${buf.length>64?' ...':''}`,
     `-- Load via bram_wr_en pulse loop or $readmemh (PAL: sel=4, bram_len=${w*h}).`,
   ].join('\n');
   navigator.clipboard.writeText(vhd).then(() => {
-    $('export-info').textContent = 'VHDL comment copied to clipboard!';
-    setTimeout(() => updateInfoBar(w,h), 2500);
+    $('export-info').textContent='VHDL comment copied to clipboard!';
+    setTimeout(() => updateInfoBar(cvs.width,cvs.height),2500);
   });
 });
 
@@ -981,61 +1258,46 @@ on($('btn-copy-vhd'),'click', () => {
 // Hover pixel info
 // ============================================================
 on($('canvas-wrap'),'mousemove', e => {
-  const r  = cvs.getBoundingClientRect();
-  const sx = cvs.width  / r.width;
-  const sy = cvs.height / r.height;
-  const mx = Math.floor((e.clientX-r.left)*sx);
-  const my = Math.floor((e.clientY-r.top )*sy);
+  const r=cvs.getBoundingClientRect(), sx=cvs.width/r.width, sy=cvs.height/r.height;
+  const mx=Math.floor((e.clientX-r.left)*sx), my=Math.floor((e.clientY-r.top)*sy);
   if (mx<0||my<0||mx>=cvs.width||my>=cvs.height) return;
-  const d  = ctx.getImageData(mx,my,1,1).data;
-  const lm = Math.round(0.299*d[0]+0.587*d[1]+0.114*d[2]);
-  $('info-bar').textContent =
-    `x=${mx}  y=${my}  │  R=${d[0]} G=${d[1]} B=${d[2]}  │  ` +
-    `Lum=${lm}  (1-bit: ${lm>= +$('threshold').value?1:0})  │  ` +
-    `BRAM addr: ${my*cvs.width+mx}`;
+  const d=ctx.getImageData(mx,my,1,1).data;
+  const lm=Math.round(0.299*d[0]+0.587*d[1]+0.114*d[2]);
+  $('info-bar').textContent=`x=${mx}  y=${my}  │  R=${d[0]} G=${d[1]} B=${d[2]}  │  Lum=${lm}  (1-bit: ${lm>=+$('threshold').value?1:0})  │  BRAM addr: ${my*cvs.width+mx}`;
 });
 
 // ============================================================
 // Wire controls
 // ============================================================
-[
-  'cvs-w','cvs-h','col-fg','col-bg',
-  'stripe-w','check-w','check-h','grad-steps',
-  'cross-h','cross-v','cross-lw',
-  'circ-cx','circ-cy','circ-rx','circ-ry',
-].forEach(id => {
-  const el = $(id);
-  if (el) on(el,'input', render);
-});
+['cvs-w','cvs-h','col-fg','col-bg',
+ 'stripe-w','check-w','check-h','grad-steps',
+ 'cross-h','cross-v','cross-lw',
+ 'circ-cx','circ-cy','circ-rx','circ-ry',
+].forEach(id => { const el=$(id); if(el) on(el,'input',render); });
+
 on($('circ-fill'),   'change', render);
 on($('pal-overlay'), 'change', render);
 on($('txt-enable'),  'change', render);
 on($('pat-type'),    'change', updateSections);
 
-on($('brightness'),'input', () => {
-  $('brightness-val').textContent = $('brightness').value; render();
-});
-on($('threshold'),'input', () => {
-  $('threshold-val').textContent = $('threshold').value;
-});
+on($('brightness'),'input', () => { $('brightness-val').textContent=$('brightness').value; render(); });
+on($('threshold'), 'input', () => { $('threshold-val').textContent=$('threshold').value; });
 
 on($('fmt-preset'),'change', () => {
-  const v = $('fmt-preset').value; if (!v) return;
-  const [fw,fh] = v.split(',').map(Number);
-  $('cvs-w').value = fw; $('cvs-h').value = fh;
-  $('circ-cx').value = Math.floor(fw/2);
-  $('circ-cy').value = Math.floor(fh/2);
+  const v=$('fmt-preset').value; if (!v) return;
+  const [fw,fh]=v.split(',').map(Number);
+  $('cvs-w').value=fw; $('cvs-h').value=fh;
+  $('circ-cx').value=Math.floor(fw/2); $('circ-cy').value=Math.floor(fh/2);
   render();
 });
 
 on($('btn-add-text'),'click', () => {
-  const w = +$('cvs-w').value, h = +$('cvs-h').value;
-  addTextEntry('Text', 20, Math.min(40 + $('txt-list').childElementCount*40, h-20), 32);
+  const w=+$('cvs-w').value, h=+$('cvs-h').value;
+  addTextEntry('Text',20,Math.min(40+$('txt-list').childElementCount*40,h-20),32);
 });
-
+on($('btn-png'),         'click', openPngModal);
 on($('btn-regen-czones'),'click', () => { buildColorZoneList(); render(); });
 on($('cz-count'),        'input', () => { buildColorZoneList(); render(); });
-
 on($('btn-regen-mz'), 'click', () => { buildMultiZoneList(); render(); });
 on($('mz-count'),     'input', () => { buildMultiZoneList(); render(); });
 on($('mz-dir'),       'change',() => { buildMultiZoneList(); render(); });
@@ -1044,10 +1306,12 @@ on($('mz-dir'),       'change',() => { buildMultiZoneList(); render(); });
 // Init
 // ============================================================
 function init() {
+  initBorderPicker();
   buildColorZoneList();
   buildMultiZoneList();
   addTextEntry('PAL TEST', 20, 40, 36);
-  updateSections();  // triggers render()
+  renderTemplateList();
+  updateSections();   // triggers render
 }
 init();
 </script>
