@@ -284,14 +284,28 @@ begin
                 csync => csync_s, field => field_s, active => active_s);
   end generate gen_il;
 
+  -- Progressive sync inlined -- no external entity required.
+  -- Eliminates pal_csync_prog.vhd dependency for IP packager compatibility.
   gen_prog : if PROGRESSIVE generate
-    u_csync_p : entity work.pal_csync_prog
-      generic map (
-        H_FRONT  => H_FRONT,   H_SYNC_W => H_SYNC_W,
-        H_BACK   => H_BACK,    H_ACTIVE => H_ACTIVE,  H_TOTAL  => H_TOTAL,
-        V_ACT_S  => V_ACT_S_P, V_ACT_E  => V_ACT_E_P, V_SYNC_W => V_SYNC_W_P)
-      port map (h_cnt => h_cnt, v_cnt => v_cnt,
-                csync => csync_s, field => field_s, active => active_s);
+    process(h_cnt, v_cnt)
+      variable in_vsync  : boolean;
+      variable in_hsync  : boolean;
+      variable in_broad  : boolean;
+      variable in_active : boolean;
+    begin
+      in_vsync  := (v_cnt < V_SYNC_W_P);
+      in_hsync  := (h_cnt >= H_FRONT) and (h_cnt < H_FRONT + H_SYNC_W);
+      in_broad  := (h_cnt >= H_FRONT) and (h_cnt < H_TOTAL - H_FRONT);
+      in_active := (v_cnt >= V_ACT_S_P) and (v_cnt <= V_ACT_E_P) and
+                   (h_cnt >= H_ACT_S)   and (h_cnt < H_ACT_S + H_ACTIVE);
+      if in_vsync then
+        csync_s <= '1' when in_broad  else '0';
+      else
+        csync_s <= '1' when in_hsync  else '0';
+      end if;
+      field_s  <= '0';
+      active_s <= '1' when in_active else '0';
+    end process;
   end generate gen_prog;
 
   -- -------------------------------------------------------------------------
