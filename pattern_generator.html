@@ -78,7 +78,6 @@ select, input[type=text], input[type=number] {
 }
 select:focus, input[type=text]:focus { border-color: var(--accent); }
 select { cursor: pointer; }
-
 input[type=range] {
   width: 100%; height: 4px; appearance: none;
   background: var(--border); border-radius: 4px;
@@ -135,7 +134,109 @@ input[type=color] {
 .tmpl-meta { font-size: 10px; color: var(--muted); margin-top: 1px; }
 .no-tmpl { color: var(--muted); text-align: center; padding: 14px 0; font-size: 11px; }
 
-/* ═══ MAIN AREA ═══ */
+/* ═══ COLOUR ROW HEADER ═══ */
+.colour-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.colour-row-head .sec-title { margin-bottom: 0; border: none; padding: 0; }
+
+/* ═══ BORDER PICKER ═══ */
+.bp-presets {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin-bottom: 11px;
+}
+.bp-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  transition: border-color .15s, background .15s;
+}
+.bp-btn:hover { border-color: var(--accent); background: var(--bg-hover); }
+.bp-btn.active { border-color: var(--accent2); background: rgba(155,92,246,.12); }
+.bp-btn svg { width: 22px; height: 22px; display: block; overflow: visible; }
+
+/* SVG border picker canvas */
+.bp-canvas-wrap {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+#bpSvg {
+  width: 100%;
+  max-width: 155px;
+  display: block;
+  overflow: visible;
+}
+.bp-cell { transition: fill .2s; }
+.bp-vis-line {
+  stroke: var(--border);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  stroke-linecap: round;
+  transition: stroke .15s, stroke-width .15s, stroke-dasharray .15s;
+  fill: none;
+}
+.bp-vis-line.bp-on {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+}
+.bp-hit {
+  fill: transparent;
+  cursor: pointer;
+  rx: 3;
+}
+.bp-hit:hover { fill: rgba(91,142,248,0.15); }
+
+/* Border legend labels */
+.bp-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.bp-lbl {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; color: var(--muted);
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 5px; padding: 4px 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: border-color .12s, color .12s;
+}
+.bp-lbl:hover { border-color: var(--accent); }
+.bp-lbl.on { color: var(--text); border-color: var(--accent); }
+.bp-lbl-dot {
+  width: 8px; height: 8px; border-radius: 2px;
+  background: var(--border); flex-shrink: 0;
+  transition: background .12s;
+}
+.bp-lbl.on .bp-lbl-dot { background: var(--accent); }
+
+/* Alt fill checkbox row */
+.chk-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+.chk-row input[type=checkbox] {
+  width: 15px; height: 15px; cursor: pointer; accent-color: var(--accent);
+}
+.chk-row span { font-size: 11px; color: var(--muted); }
+
+/* ═══ MAIN ═══ */
 .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .toolbar {
   padding: 10px 18px;
@@ -144,11 +245,9 @@ input[type=color] {
 }
 .toolbar-title { flex: 1; font-size: 13px; font-weight: 600; }
 .toolbar-title span { color: var(--muted); font-weight: 400; font-size: 12px; }
-
 .canvas-wrap {
   flex: 1; overflow: auto; display: flex;
-  align-items: center; justify-content: center;
-  padding: 24px;
+  align-items: center; justify-content: center; padding: 24px;
   background-color: #090910;
   background-image:
     linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
@@ -179,27 +278,15 @@ input[type=color] {
 .modal-box input { margin-bottom: 10px; }
 .modal-hint {
   font-size: 11px; color: var(--muted); margin-bottom: 18px;
-  background: var(--bg-panel); border-radius: 6px; padding: 8px 10px;
-  line-height: 1.6;
+  background: var(--bg-panel); border-radius: 6px; padding: 8px 10px; line-height: 1.6;
 }
 .modal-hint code { color: var(--accent); font-family: monospace; }
 .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
-
-/* ═══ RANDOMISE COLOUR ROW ═══ */
-.colour-row-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.colour-row-head .sec-title { margin-bottom: 0; border: none; padding: 0; }
-
-/* small tag/badge */
-.badge {
-  font-size: 10px; font-weight: 600; padding: 2px 7px;
-  border-radius: 20px; background: var(--bg-panel);
-  color: var(--muted); border: 1px solid var(--border);
-}
 </style>
 </head>
 <body>
 
-<!-- ═══════════════════════════════ SIDEBAR ═══════════════════════════════ -->
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
 <div class="sidebar">
   <div class="sidebar-head">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
@@ -222,6 +309,7 @@ input[type=color] {
           <option value="dstripes">Diagonal Stripes</option>
           <option value="dots">Polka Dots</option>
           <option value="grid">Grid / Crosshatch</option>
+          <option value="multi_zone">Multi-Zone Grid</option>
           <option value="zigzag">Zigzag</option>
           <option value="diamond">Diamond</option>
           <option value="hexagons">Hexagons</option>
@@ -245,11 +333,11 @@ input[type=color] {
       </div>
       <div class="row2">
         <div class="field">
-          <label>Background</label>
-          <input type="color" id="color1" value="#1a1a2e" oninput="render()">
+          <label id="lbl-color1">Background</label>
+          <input type="color" id="color1" value="#1a1a2e" oninput="render();updateBorderSVG()">
         </div>
         <div class="field">
-          <label>Foreground</label>
+          <label id="lbl-color2">Foreground</label>
           <input type="color" id="color2" value="#4f8ef7" oninput="render()">
         </div>
       </div>
@@ -294,6 +382,121 @@ input[type=color] {
       </div>
     </div>
 
+    <!-- ═══ BORDER SECTION (multi_zone only) ═══ -->
+    <div class="sec" id="borderSection" style="display:none">
+      <div class="sec-title">Cell Borders</div>
+
+      <!-- 6 quick-preset icon buttons -->
+      <div class="bp-presets" id="bpPresets">
+
+        <!-- None -->
+        <button class="bp-btn" id="bpb-none" title="No Borders" onclick="setBorderPreset('none')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#1e2540" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/></svg>
+        </button>
+
+        <!-- Outside / Box -->
+        <button class="bp-btn" id="bpb-outside" title="Outside Box" onclick="setBorderPreset('outside')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#1e2540" stroke="#5b8ef8" stroke-width="2"/><line x1="2" y1="11" x2="20" y2="11" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/></svg>
+        </button>
+
+        <!-- All borders -->
+        <button class="bp-btn" id="bpb-all" title="All Borders" onclick="setBorderPreset('all')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#1e2540" stroke="#5b8ef8" stroke-width="2"/><line x1="2" y1="11" x2="20" y2="11" stroke="#5b8ef8" stroke-width="1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#5b8ef8" stroke-width="1.5"/></svg>
+        </button>
+
+        <!-- Inner H only -->
+        <button class="bp-btn" id="bpb-insideH" title="Inner Horizontal" onclick="setBorderPreset('insideH')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#1e2540" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#5b8ef8" stroke-width="2"/><line x1="11" y1="2" x2="11" y2="20" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/></svg>
+        </button>
+
+        <!-- Inner V only -->
+        <button class="bp-btn" id="bpb-insideV" title="Inner Vertical" onclick="setBorderPreset('insideV')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#1e2540" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="11" y1="2" x2="11" y2="20" stroke="#5b8ef8" stroke-width="2"/></svg>
+        </button>
+
+        <!-- Inside cross (inner H + V) -->
+        <button class="bp-btn" id="bpb-inside" title="Inner Cross (H + V)" onclick="setBorderPreset('inside')">
+          <svg viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" fill="#1e2540" stroke="#2a3350" stroke-width="1" stroke-dasharray="2.5,1.5"/><line x1="2" y1="11" x2="20" y2="11" stroke="#5b8ef8" stroke-width="2"/><line x1="11" y1="2" x2="11" y2="20" stroke="#5b8ef8" stroke-width="2"/></svg>
+        </button>
+
+      </div><!-- /bp-presets -->
+
+      <!-- Interactive SVG border picker -->
+      <div class="bp-canvas-wrap">
+        <svg id="bpSvg" viewBox="0 0 130 130" xmlns="http://www.w3.org/2000/svg">
+
+          <!-- 9 cell fills (3×3, each 30×30, grid at 20,20 → 110,110) -->
+          <rect class="bp-cell" x="20" y="20" width="30" height="30"/>
+          <rect class="bp-cell" x="50" y="20" width="30" height="30"/>
+          <rect class="bp-cell" x="80" y="20" width="30" height="30"/>
+          <rect class="bp-cell" x="20" y="50" width="30" height="30"/>
+          <rect class="bp-cell" x="50" y="50" width="30" height="30"/>
+          <rect class="bp-cell" x="80" y="50" width="30" height="30"/>
+          <rect class="bp-cell" x="20" y="80" width="30" height="30"/>
+          <rect class="bp-cell" x="50" y="80" width="30" height="30"/>
+          <rect class="bp-cell" x="80" y="80" width="30" height="30"/>
+
+          <!-- Visual border lines (id used for JS updates) -->
+          <line id="bpL-top"     class="bp-vis-line" x1="20" y1="20"  x2="110" y2="20"/>
+          <line id="bpL-innerH1" class="bp-vis-line" x1="20" y1="50"  x2="110" y2="50"/>
+          <line id="bpL-innerH2" class="bp-vis-line" x1="20" y1="80"  x2="110" y2="80"/>
+          <line id="bpL-bottom"  class="bp-vis-line" x1="20" y1="110" x2="110" y2="110"/>
+          <line id="bpL-left"    class="bp-vis-line" x1="20" y1="20"  x2="20"  y2="110"/>
+          <line id="bpL-innerV1" class="bp-vis-line" x1="50" y1="20"  x2="50"  y2="110"/>
+          <line id="bpL-innerV2" class="bp-vis-line" x1="80" y1="20"  x2="80"  y2="110"/>
+          <line id="bpL-right"   class="bp-vis-line" x1="110" y1="20" x2="110" y2="110"/>
+
+          <!-- Outer-border labels inside SVG -->
+          <text x="65"  y="13"  text-anchor="middle" font-size="7" fill="#7b8aab" font-family="sans-serif">TOP</text>
+          <text x="65"  y="124" text-anchor="middle" font-size="7" fill="#7b8aab" font-family="sans-serif">BOTTOM</text>
+          <text x="10"  y="65"  text-anchor="middle" font-size="7" fill="#7b8aab" font-family="sans-serif" transform="rotate(-90,10,65)">LEFT</text>
+          <text x="120" y="65"  text-anchor="middle" font-size="7" fill="#7b8aab" font-family="sans-serif" transform="rotate(90,120,65)">RIGHT</text>
+
+          <!-- Hit areas (transparent wide click zones) -->
+          <!-- Vertical (full height, own columns) — placed first so H can overlap at intersection points -->
+          <rect class="bp-hit" data-b="left"   x="14" y="20" width="12" height="90"/>
+          <rect class="bp-hit" data-b="innerV" x="44" y="20" width="12" height="90"/>
+          <rect class="bp-hit" data-b="innerV" x="74" y="20" width="12" height="90"/>
+          <rect class="bp-hit" data-b="right"  x="104" y="20" width="12" height="90"/>
+
+          <!-- Horizontal (avoid left/right column hit zones x=14-26 and x=104-116) -->
+          <rect class="bp-hit" data-b="top"    x="26" y="14" width="78" height="12"/>
+          <rect class="bp-hit" data-b="innerH" x="26" y="44" width="78" height="12"/>
+          <rect class="bp-hit" data-b="innerH" x="26" y="74" width="78" height="12"/>
+          <rect class="bp-hit" data-b="bottom" x="26" y="104" width="78" height="12"/>
+
+        </svg>
+      </div><!-- /bp-canvas-wrap -->
+
+      <!-- Individual toggle labels (click to toggle each border) -->
+      <div class="bp-labels">
+        <div class="bp-lbl" id="bpl-top"    onclick="toggleBorder('top')">    <span class="bp-lbl-dot"></span>Top</div>
+        <div class="bp-lbl" id="bpl-bottom" onclick="toggleBorder('bottom')"> <span class="bp-lbl-dot"></span>Bottom</div>
+        <div class="bp-lbl" id="bpl-left"   onclick="toggleBorder('left')">   <span class="bp-lbl-dot"></span>Left</div>
+        <div class="bp-lbl" id="bpl-right"  onclick="toggleBorder('right')">  <span class="bp-lbl-dot"></span>Right</div>
+        <div class="bp-lbl" id="bpl-innerH" onclick="toggleBorder('innerH')"> <span class="bp-lbl-dot"></span>Mid H</div>
+        <div class="bp-lbl" id="bpl-innerV" onclick="toggleBorder('innerV')"> <span class="bp-lbl-dot"></span>Mid V</div>
+      </div>
+
+      <!-- Border colour and width -->
+      <div class="field">
+        <label>Border Color</label>
+        <input type="color" id="borderColor" value="#5b8ef8" oninput="updateBorderSVG();render()">
+      </div>
+      <div class="field">
+        <label>Border Width <span class="val" id="bwVal">1 px</span></label>
+        <input type="range" id="borderW" min="1" max="10" value="1"
+               oninput="sv('bwVal',this.value,' px');render()">
+      </div>
+
+      <!-- Alternate cell fill -->
+      <label class="chk-row">
+        <input type="checkbox" id="altFill" onchange="render()">
+        <span>Alternate cell fill (checkerboard)</span>
+      </label>
+
+    </div><!-- /borderSection -->
+
     <!-- Output size -->
     <div class="sec">
       <div class="sec-title">Output Size</div>
@@ -337,7 +540,7 @@ input[type=color] {
   </div><!-- /sidebar-body -->
 </div><!-- /sidebar -->
 
-<!-- ═══════════════════════════════ MAIN ═══════════════════════════════ -->
+<!-- ═══════════════════ MAIN ═══════════════════ -->
 <div class="main">
   <div class="toolbar">
     <span class="toolbar-title" id="toolbarTitle">
@@ -362,7 +565,7 @@ input[type=color] {
   </div>
 </div>
 
-<!-- ═══════════════════════════════ SAVE MODAL ═══════════════════════════════ -->
+<!-- ═══════════════════ SAVE MODAL ═══════════════════ -->
 <div class="modal-backdrop" id="saveModal" style="display:none" onclick="closeSaveModal()">
   <div class="modal-box" onclick="event.stopPropagation()">
     <h3>💾 Save as PNG</h3>
@@ -383,52 +586,153 @@ input[type=color] {
   </div>
 </div>
 
+<!-- ═══════════════════════════════ SCRIPT ═══════════════════════════════ -->
 <script>
 'use strict';
 
-// ─── Canvas & context ───────────────────────────────────────────────────────
 const canvas = document.getElementById('patternCanvas');
 const ctx    = canvas.getContext('2d');
-
-// ─── Tiny helpers ────────────────────────────────────────────────────────────
 const $  = id => document.getElementById(id);
 const sv = (id, v, sfx='') => $(id).textContent = v + sfx;
+function show(id, visible) { $(id).style.display = visible ? '' : 'none'; }
 
-function show(id, visible) {
-  $(id).style.display = visible ? '' : 'none';
+// ─── Border state ───────────────────────────────────────────────────────────
+const borderState = {
+  top:    false,
+  bottom: false,
+  left:   false,
+  right:  false,
+  innerH: false,
+  innerV: false,
+};
+
+// Maps border key → visual line IDs in SVG
+const BORDER_LINES = {
+  top:    ['bpL-top'],
+  bottom: ['bpL-bottom'],
+  left:   ['bpL-left'],
+  right:  ['bpL-right'],
+  innerH: ['bpL-innerH1','bpL-innerH2'],
+  innerV: ['bpL-innerV1','bpL-innerV2'],
+};
+
+// Maps active preset → highlight the right preset button
+const PRESET_SIGNATURES = {
+  none:    [false,false,false,false,false,false],
+  outside: [true, true, true, true, false,false],
+  all:     [true, true, true, true, true, true ],
+  insideH: [false,false,false,false,true, false],
+  insideV: [false,false,false,false,false,true ],
+  inside:  [false,false,false,false,true, true ],
+};
+const PRESET_ORDER = ['top','bottom','left','right','innerH','innerV'];
+
+function matchPreset() {
+  const vec = PRESET_ORDER.map(k => borderState[k]);
+  for (const [name, sig] of Object.entries(PRESET_SIGNATURES)) {
+    if (sig.every((v,i) => v === vec[i])) return name;
+  }
+  return null;
 }
 
+// ─── Toggle / preset ────────────────────────────────────────────────────────
+function toggleBorder(name) {
+  borderState[name] = !borderState[name];
+  updateBorderSVG();
+  if ($('patternType').value === 'multi_zone') render();
+}
+
+function setBorderPreset(name) {
+  const presets = {
+    none:    {top:false,bottom:false,left:false,right:false,innerH:false,innerV:false},
+    all:     {top:true, bottom:true, left:true, right:true, innerH:true, innerV:true },
+    outside: {top:true, bottom:true, left:true, right:true, innerH:false,innerV:false},
+    inside:  {top:false,bottom:false,left:false,right:false,innerH:true, innerV:true },
+    insideH: {top:false,bottom:false,left:false,right:false,innerH:true, innerV:false},
+    insideV: {top:false,bottom:false,left:false,right:false,innerH:false,innerV:true },
+  };
+  if (presets[name]) {
+    Object.assign(borderState, presets[name]);
+    updateBorderSVG();
+    if ($('patternType').value === 'multi_zone') render();
+  }
+}
+
+// ─── Update SVG border picker visuals ────────────────────────────────────────
+function updateBorderSVG() {
+  // Cell fill = current color1
+  const c1 = $('color1').value || '#1a1a2e';
+  document.querySelectorAll('#bpSvg .bp-cell').forEach(el => el.setAttribute('fill', c1));
+
+  // Border line colour = borderColor
+  const bc = $('borderColor').value || '#5b8ef8';
+
+  // Update visual lines
+  for (const [key, ids] of Object.entries(BORDER_LINES)) {
+    const on = borderState[key];
+    ids.forEach(id => {
+      const el = $(id);
+      if (!el) return;
+      el.classList.toggle('bp-on', on);
+      if (on) el.setAttribute('stroke', bc);
+      else    el.removeAttribute('stroke');  // falls back to CSS var(--border)
+    });
+  }
+
+  // Update label chips
+  for (const key of Object.keys(borderState)) {
+    const lbl = $('bpl-' + key);
+    if (lbl) lbl.classList.toggle('on', borderState[key]);
+  }
+
+  // Highlight matching preset button
+  const matched = matchPreset();
+  document.querySelectorAll('.bp-btn').forEach(b => b.classList.remove('active'));
+  if (matched) { const el = $('bpb-' + matched); if (el) el.classList.add('active'); }
+}
+
+// ─── Wire SVG hit areas ───────────────────────────────────────────────────────
+function initBorderPicker() {
+  document.querySelectorAll('#bpSvg .bp-hit').forEach(el => {
+    el.addEventListener('click', () => toggleBorder(el.dataset.b));
+  });
+}
+
+// ─── Timestamp & helpers ────────────────────────────────────────────────────
 function getTimestamp() {
-  const n = new Date();
-  const p = v => String(v).padStart(2,'0');
+  const n = new Date(), p = v => String(v).padStart(2,'0');
   return `${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}_${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}`;
 }
-
 function hex(r,g,b) {
-  return '#' + [r,g,b].map(v => Math.min(255,Math.max(0,v|0)).toString(16).padStart(2,'0')).join('');
+  return '#'+[r,g,b].map(v=>Math.min(255,Math.max(0,v|0)).toString(16).padStart(2,'0')).join('');
 }
 function randByte()  { return (Math.random()*256)|0; }
 function randColor() { return hex(randByte(),randByte(),randByte()); }
 
-// ─── Read all control values ──────────────────────────────────────────────
+// ─── Read settings ──────────────────────────────────────────────────────────
 function getSettings() {
   return {
-    type:      $('patternType').value,
-    color1:    $('color1').value,
-    color2:    $('color2').value,
-    color3:    $('color3').value,
-    cellSize:  +$('cellSize').value,
-    lineWidth: +$('lineWidth').value,
-    angle:     +$('angle').value,
-    gap:       +$('gap').value,
-    ampl:      +$('ampl').value,
-    roundness: +$('roundness').value,
-    canvasW:   +$('canvasW').value,
-    canvasH:   +$('canvasH').value,
+    type:        $('patternType').value,
+    color1:      $('color1').value,
+    color2:      $('color2').value,
+    color3:      $('color3').value,
+    cellSize:    +$('cellSize').value,
+    lineWidth:   +$('lineWidth').value,
+    angle:       +$('angle').value,
+    gap:         +$('gap').value,
+    ampl:        +$('ampl').value,
+    roundness:   +$('roundness').value,
+    canvasW:     +$('canvasW').value,
+    canvasH:     +$('canvasH').value,
+    // multi_zone extras
+    borders:     { ...borderState },
+    borderColor: $('borderColor').value,
+    borderW:     +$('borderW').value,
+    altFill:     $('altFill').checked,
   };
 }
 
-// ─── Apply settings back to controls ─────────────────────────────────────
+// ─── Apply settings ─────────────────────────────────────────────────────────
 function applySettings(s) {
   $('patternType').value  = s.type;
   $('color1').value       = s.color1 || '#1a1a2e';
@@ -448,10 +752,16 @@ function applySettings(s) {
   sv('gapVal',   s.gap       ?? 8,   ' px');
   sv('amplVal',  s.ampl      ?? 12,  ' px');
   sv('roundVal', s.roundness ?? 4,   ' px');
-  resizeCanvas();   // also calls onTypeChange → render
+  // Border extras
+  if (s.borders) Object.assign(borderState, s.borders);
+  if (s.borderColor) $('borderColor').value = s.borderColor;
+  if (s.borderW !== undefined) { $('borderW').value = s.borderW; sv('bwVal', s.borderW, ' px'); }
+  if (s.altFill !== undefined) $('altFill').checked = s.altFill;
+  updateBorderSVG();
+  resizeCanvas();
 }
 
-// ─── Show/hide controls per pattern ──────────────────────────────────────
+// ─── Show/hide controls per pattern ────────────────────────────────────────
 function onTypeChange() {
   const t = $('patternType').value;
   const needLW    = ['hstripes','vstripes','dstripes','grid','waves'].includes(t);
@@ -460,6 +770,7 @@ function onTypeChange() {
   const needAmpl  = ['waves','zigzag'].includes(t);
   const needRound = ['brick','dots'].includes(t);
   const needC3    = ['triangles','hexagons'].includes(t);
+  const isMZ      = t === 'multi_zone';
 
   show('lineWidthField', needLW);
   show('angleField',     needAngle);
@@ -467,58 +778,59 @@ function onTypeChange() {
   show('amplField',      needAmpl);
   show('roundField',     needRound);
   show('color3Field',    needC3);
+  show('borderSection',  isMZ);
+
+  // Relabel color1/color2 for multi_zone
+  $('lbl-color1').textContent = isMZ ? 'Cell Fill'     : 'Background';
+  $('lbl-color2').textContent = isMZ ? 'Alternate Fill' : 'Foreground';
+
   render();
 }
 
-// ─── Canvas resize ───────────────────────────────────────────────────────
+// ─── Canvas resize ───────────────────────────────────────────────────────────
 function resizeCanvas() {
   canvas.width  = +$('canvasW').value;
   canvas.height = +$('canvasH').value;
-  onTypeChange();   // refreshes visibility flags + render
+  onTypeChange();
 }
 
-// ─── Randomise colours ───────────────────────────────────────────────────
+// ─── Randomise colours ───────────────────────────────────────────────────────
 function randomiseColors() {
   $('color1').value = randColor();
   $('color2').value = randColor();
   $('color3').value = randColor();
-  render();
+  render(); updateBorderSVG();
 }
 
-// ─── Save PNG modal ──────────────────────────────────────────────────────
+// ─── Save PNG modal ──────────────────────────────────────────────────────────
 function openSaveModal() {
   $('saveFilename').value = '';
   updateModalHint('');
   $('saveModal').style.display = 'flex';
-  setTimeout(() => $('saveFilename').focus(), 50);
-  $('saveFilename').oninput = () => updateModalHint($('saveFilename').value);
+  setTimeout(() => $('saveFilename').focus(), 40);
 }
-function closeSaveModal() {
-  $('saveModal').style.display = 'none';
-}
+function closeSaveModal() { $('saveModal').style.display = 'none'; }
 function updateModalHint(raw) {
-  const ts   = getTimestamp();
+  const ts = getTimestamp();
   const name = raw.trim() ? `${raw.trim()}_${ts}.png` : `${ts}.png`;
-  $('modalHint').innerHTML =
-    `File will be saved as:<br><code>${name}</code>`;
+  $('modalHint').innerHTML = `File will be saved as:<br><code>${name}</code>`;
 }
 function confirmSave() {
   const raw  = $('saveFilename').value;
   const ts   = getTimestamp();
   const name = raw.trim() ? `${raw.trim()}_${ts}.png` : `${ts}.png`;
-  const a    = document.createElement('a');
-  a.href     = canvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
   a.download = name;
   a.click();
   closeSaveModal();
 }
+$('saveFilename').addEventListener('input', () => updateModalHint($('saveFilename').value));
 
-// ─── Templates (localStorage) ────────────────────────────────────────────
+// ─── Templates ──────────────────────────────────────────────────────────────
 const LS_KEY = 'patgen_v1_templates';
-
 function loadTemplates()   { try { return JSON.parse(localStorage.getItem(LS_KEY)||'[]'); } catch { return []; } }
 function storeTemplates(a) { localStorage.setItem(LS_KEY, JSON.stringify(a)); }
-
 function saveTemplate() {
   const name = $('tmplName').value.trim();
   if (!name) { $('tmplName').focus(); return; }
@@ -530,71 +842,51 @@ function saveTemplate() {
   $('tmplName').value = '';
   renderTmplList();
 }
-
-function deleteTemplate(name) {
-  storeTemplates(loadTemplates().filter(t => t.name !== name));
-  renderTmplList();
-}
-
-function loadTemplate(name) {
-  const t = loadTemplates().find(t => t.name === name);
-  if (t) applySettings(t.settings);
-}
-
+function deleteTemplate(name) { storeTemplates(loadTemplates().filter(t => t.name !== name)); renderTmplList(); }
+function loadTemplate(name)   { const t = loadTemplates().find(t => t.name === name); if (t) applySettings(t.settings); }
 function esc(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-
 function renderTmplList() {
-  const list = loadTemplates();
-  const el   = $('tmplList');
-  if (!list.length) {
-    el.innerHTML = '<div class="no-tmpl">No saved templates yet</div>';
-    return;
-  }
+  const list = loadTemplates(), el = $('tmplList');
+  if (!list.length) { el.innerHTML = '<div class="no-tmpl">No saved templates yet</div>'; return; }
   el.innerHTML = list.map(t => `
     <div class="tmpl-item">
       <div class="tmpl-click" onclick="loadTemplate('${esc(t.name)}')">
         <div class="tmpl-name">${esc(t.name)}</div>
         <div class="tmpl-meta">${esc(t.settings.type)} &bull; ${t.settings.canvasW}&times;${t.settings.canvasH} &bull; ${t.ts}</div>
       </div>
-      <button class="btn btn-red" onclick="deleteTemplate('${esc(t.name)}')" title="Delete">✕</button>
+      <button class="btn btn-red" onclick="deleteTemplate('${esc(t.name)}')" title="Delete">&#10005;</button>
     </div>`).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  PATTERN RENDERERS
+//  MAIN RENDER
 // ═══════════════════════════════════════════════════════════════════════════
-
 function render() {
-  const s  = getSettings();
-  const W  = canvas.width, H = canvas.height;
+  const s = getSettings();
+  const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
-
   const typeName = $('patternType').options[$('patternType').selectedIndex].text;
-  $('toolbarTitle').innerHTML = `${typeName} <span>— ${W} × ${H}</span>`;
-
+  $('toolbarTitle').innerHTML = `${typeName} <span>— ${W} &times; ${H}</span>`;
   ({
     checkerboard, hstripes, vstripes, dstripes, dots,
-    grid, zigzag, diamond, hexagons, waves, brick, triangles
+    grid, multi_zone, zigzag, diamond, hexagons, waves, brick, triangles
   }[s.type] || checkerboard)(W, H, s);
 }
 
-// ── 1. Checkerboard ────────────────────────────────────────────────────────
+// ─── 1. Checkerboard ─────────────────────────────────────────────────────────
 function checkerboard(W, H, s) {
   const sz = s.cellSize;
-  const cols = Math.ceil(W/sz)+1, rows = Math.ceil(H/sz)+1;
-  for (let r=0; r<rows; r++) {
-    for (let c=0; c<cols; c++) {
+  for (let r=0; r<=Math.ceil(H/sz); r++)
+    for (let c=0; c<=Math.ceil(W/sz); c++) {
       ctx.fillStyle = (r+c)%2===0 ? s.color1 : s.color2;
       ctx.fillRect(c*sz, r*sz, sz, sz);
     }
-  }
 }
 
-// ── 2. Horizontal stripes ─────────────────────────────────────────────────
+// ─── 2. Horizontal stripes ───────────────────────────────────────────────────
 function hstripes(W, H, s) {
   const sz = s.cellSize, lw = s.lineWidth;
   ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
@@ -602,7 +894,7 @@ function hstripes(W, H, s) {
   for (let y=0; y<H+sz; y+=sz) ctx.fillRect(0, y, W, lw);
 }
 
-// ── 3. Vertical stripes ───────────────────────────────────────────────────
+// ─── 3. Vertical stripes ─────────────────────────────────────────────────────
 function vstripes(W, H, s) {
   const sz = s.cellSize, lw = s.lineWidth;
   ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
@@ -610,54 +902,39 @@ function vstripes(W, H, s) {
   for (let x=0; x<W+sz; x+=sz) ctx.fillRect(x, 0, lw, H);
 }
 
-// ── 4. Diagonal stripes ───────────────────────────────────────────────────
+// ─── 4. Diagonal stripes ─────────────────────────────────────────────────────
 function dstripes(W, H, s) {
-  const sz  = s.cellSize, lw = s.lineWidth;
-  const ang = (s.angle * Math.PI) / 180;
-  const diag = Math.hypot(W, H) + sz*2;
+  const sz = s.cellSize, lw = s.lineWidth, ang = (s.angle*Math.PI)/180;
+  const diag = Math.hypot(W,H) + sz*2;
   ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
-  ctx.save();
-  ctx.translate(W/2, H/2);
-  ctx.rotate(ang);
-  ctx.strokeStyle = s.color2;
-  ctx.lineWidth   = lw;
+  ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(ang);
+  ctx.strokeStyle = s.color2; ctx.lineWidth = lw;
   ctx.beginPath();
-  for (let x=-diag; x<diag; x+=sz) {
-    ctx.moveTo(x, -diag); ctx.lineTo(x, diag);
-  }
-  ctx.stroke();
-  ctx.restore();
+  for (let x=-diag; x<diag; x+=sz) { ctx.moveTo(x,-diag); ctx.lineTo(x,diag); }
+  ctx.stroke(); ctx.restore();
 }
 
-// ── 5. Polka dots ─────────────────────────────────────────────────────────
+// ─── 5. Polka dots ───────────────────────────────────────────────────────────
 function dots(W, H, s) {
-  const sz  = s.cellSize, gap = s.gap, rnd = s.roundness;
-  const r   = Math.max(1, (sz - gap) / 2);
+  const sz=s.cellSize, gap=s.gap, rnd=s.roundness, r=Math.max(1,(sz-gap)/2);
   ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
   ctx.fillStyle = s.color2;
-  for (let y=sz/2-sz; y<H+sz; y+=sz) {
+  for (let y=sz/2-sz; y<H+sz; y+=sz)
     for (let x=sz/2-sz; x<W+sz; x+=sz) {
-      if (rnd >= r) {
-        // circle
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
-      } else {
-        // rounded rect
-        const d = rnd;
+      if (rnd>=r) { ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+      else {
+        const d=rnd;
         ctx.beginPath();
-        ctx.moveTo(x-r+d, y-r);
-        ctx.arcTo (x+r, y-r, x+r, y+r, d);
-        ctx.arcTo (x+r, y+r, x-r, y+r, d);
-        ctx.arcTo (x-r, y+r, x-r, y-r, d);
-        ctx.arcTo (x-r, y-r, x+r, y-r, d);
-        ctx.closePath(); ctx.fill();
+        ctx.moveTo(x-r+d,y-r); ctx.arcTo(x+r,y-r,x+r,y+r,d);
+        ctx.arcTo(x+r,y+r,x-r,y+r,d); ctx.arcTo(x-r,y+r,x-r,y-r,d);
+        ctx.arcTo(x-r,y-r,x+r,y-r,d); ctx.closePath(); ctx.fill();
       }
     }
-  }
 }
 
-// ── 6. Grid / Crosshatch ──────────────────────────────────────────────────
+// ─── 6. Grid / Crosshatch ────────────────────────────────────────────────────
 function grid(W, H, s) {
-  const sz = s.cellSize, lw = s.lineWidth, gap = s.gap;
+  const sz=s.cellSize, lw=s.lineWidth, gap=s.gap;
   ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
   ctx.strokeStyle = s.color2; ctx.lineWidth = lw;
   ctx.beginPath();
@@ -666,163 +943,150 @@ function grid(W, H, s) {
   ctx.stroke();
 }
 
-// ── 7. Zigzag ─────────────────────────────────────────────────────────────
-function zigzag(W, H, s) {
+// ─── 7. Multi-Zone Grid (with Excel-style border selector) ──────────────────
+function multi_zone(W, H, s) {
   const sz  = s.cellSize;
-  const amp = s.ampl;
-  const lw  = Math.max(1, sz * 0.12);
-  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle = s.color2;
-  ctx.lineWidth   = lw;
-  ctx.lineJoin    = 'round';
+  const bw  = s.borderW ?? 1;
+  const bc  = s.borderColor ?? s.color2;
+  const alt = s.altFill;
+
+  const cols = Math.ceil(W / sz) + 1;
+  const rows = Math.ceil(H / sz) + 1;
+
+  // Draw cell fills
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      ctx.fillStyle = (alt && (r + c) % 2 === 1) ? s.color2 : s.color1;
+      ctx.fillRect(c * sz, r * sz, sz, sz);
+    }
+  }
+
+  // Draw selected borders
+  ctx.strokeStyle = bc;
+  ctx.lineWidth   = bw;
+  ctx.lineCap     = 'square';
+  ctx.beginPath();
+
+  const half = bw / 2;
+
+  if (borderState.top) {
+    ctx.moveTo(0, half); ctx.lineTo(W, half);
+  }
+  if (borderState.bottom) {
+    ctx.moveTo(0, H - half); ctx.lineTo(W, H - half);
+  }
+  if (borderState.left) {
+    ctx.moveTo(half, 0); ctx.lineTo(half, H);
+  }
+  if (borderState.right) {
+    ctx.moveTo(W - half, 0); ctx.lineTo(W - half, H);
+  }
+  if (borderState.innerH) {
+    for (let r = 1; r < rows; r++) {
+      const y = Math.round(r * sz) + (bw % 2 === 1 ? 0.5 : 0);
+      if (y > 0 && y < H) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    }
+  }
+  if (borderState.innerV) {
+    for (let c = 1; c < cols; c++) {
+      const x = Math.round(c * sz) + (bw % 2 === 1 ? 0.5 : 0);
+      if (x > 0 && x < W) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    }
+  }
+  ctx.stroke();
+}
+
+// ─── 8. Zigzag ───────────────────────────────────────────────────────────────
+function zigzag(W, H, s) {
+  const sz=s.cellSize, amp=s.ampl, lw=Math.max(1,sz*0.12);
+  ctx.fillStyle=s.color1; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=s.color2; ctx.lineWidth=lw; ctx.lineJoin='round';
   for (let y=-sz; y<H+sz*2; y+=sz) {
-    ctx.beginPath();
-    let up = true;
+    ctx.beginPath(); let up=true;
     for (let x=-amp*2; x<=W+amp*2; x+=amp) {
-      const py = up ? y : y + sz/2;
-      x === -amp*2 ? ctx.moveTo(x,py) : ctx.lineTo(x,py);
-      up = !up;
+      const py=up?y:y+sz/2;
+      x===-amp*2?ctx.moveTo(x,py):ctx.lineTo(x,py);
+      up=!up;
     }
     ctx.stroke();
   }
 }
 
-// ── 8. Diamond ────────────────────────────────────────────────────────────
+// ─── 9. Diamond ──────────────────────────────────────────────────────────────
 function diamond(W, H, s) {
-  const sz   = s.cellSize;
-  const diag = Math.hypot(W, H) + sz*2;
-  ctx.save();
-  ctx.translate(W/2, H/2);
-  ctx.rotate(Math.PI/4);
-  const cPerSide = Math.ceil(diag/sz)+2;
-  for (let r=-cPerSide; r<cPerSide; r++) {
-    for (let c=-cPerSide; c<cPerSide; c++) {
-      ctx.fillStyle = (r+c)%2===0 ? s.color1 : s.color2;
-      ctx.fillRect(c*sz, r*sz, sz, sz);
-    }
+  const sz=s.cellSize, diag=Math.hypot(W,H)+sz*2;
+  ctx.save(); ctx.translate(W/2,H/2); ctx.rotate(Math.PI/4);
+  const n=Math.ceil(diag/sz)+2;
+  for (let r=-n; r<n; r++) for (let c=-n; c<n; c++) {
+    ctx.fillStyle=(r+c)%2===0?s.color1:s.color2;
+    ctx.fillRect(c*sz,r*sz,sz,sz);
   }
   ctx.restore();
 }
 
-// ── 9. Hexagons ───────────────────────────────────────────────────────────
+// ─── 10. Hexagons ────────────────────────────────────────────────────────────
 function hexagons(W, H, s) {
-  const sz  = s.cellSize;
-  const r   = sz / 2;
-  const rh  = r * Math.sqrt(3);        // row height
-  const cw  = sz * 1.5;                // col stride
-  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
-
-  function hexPath(cx, cy) {
+  const sz=s.cellSize, r=sz/2, rh=r*Math.sqrt(3), cw=sz*1.5;
+  ctx.fillStyle=s.color1; ctx.fillRect(0,0,W,H);
+  function hexPath(cx,cy) {
     ctx.beginPath();
-    for (let i=0; i<6; i++) {
-      const a = (Math.PI/3)*i - Math.PI/6;
-      i===0 ? ctx.moveTo(cx+r*Math.cos(a), cy+r*Math.sin(a))
-             : ctx.lineTo(cx+r*Math.cos(a), cy+r*Math.sin(a));
-    }
+    for(let i=0;i<6;i++){const a=(Math.PI/3)*i-Math.PI/6;i===0?ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));}
     ctx.closePath();
   }
-
-  const cols = Math.ceil(W/cw)+3, rows = Math.ceil(H/rh)+3;
-  for (let col=-1; col<cols; col++) {
-    for (let row=-1; row<rows; row++) {
-      const cx = col*cw;
-      const cy = row*rh + (col%2===0 ? 0 : rh/2);
-      hexPath(cx, cy);
-      ctx.fillStyle = (row+col)%3===0 ? s.color3 : s.color2;
-      ctx.fill();
-      ctx.strokeStyle = s.color1;
-      ctx.lineWidth   = 1;
-      ctx.stroke();
-    }
+  const cols=Math.ceil(W/cw)+3, rows=Math.ceil(H/rh)+3;
+  for(let col=-1;col<cols;col++) for(let row=-1;row<rows;row++){
+    const cx=col*cw, cy=row*rh+(col%2===0?0:rh/2);
+    hexPath(cx,cy); ctx.fillStyle=(row+col)%3===0?s.color3:s.color2; ctx.fill();
+    ctx.strokeStyle=s.color1; ctx.lineWidth=1; ctx.stroke();
   }
 }
 
-// ── 10. Waves ─────────────────────────────────────────────────────────────
+// ─── 11. Waves ───────────────────────────────────────────────────────────────
 function waves(W, H, s) {
-  const sz   = s.cellSize, amp = s.ampl, lw = s.lineWidth;
-  const freq = (2*Math.PI) / sz;
-  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle = s.color2;
-  ctx.lineWidth   = lw;
-  ctx.lineJoin    = 'round';
-  for (let y=-sz; y<H+sz*2; y+=sz) {
+  const sz=s.cellSize,amp=s.ampl,lw=s.lineWidth,freq=(2*Math.PI)/sz;
+  ctx.fillStyle=s.color1; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=s.color2; ctx.lineWidth=lw; ctx.lineJoin='round';
+  for(let y=-sz;y<H+sz*2;y+=sz){
     ctx.beginPath();
-    for (let x=0; x<=W; x+=2) {
-      const py = y + amp * Math.sin(freq * x);
-      x===0 ? ctx.moveTo(x,py) : ctx.lineTo(x,py);
-    }
+    for(let x=0;x<=W;x+=2){const py=y+amp*Math.sin(freq*x);x===0?ctx.moveTo(x,py):ctx.lineTo(x,py);}
     ctx.stroke();
   }
 }
 
-// ── 11. Brick ─────────────────────────────────────────────────────────────
+// ─── 12. Brick ───────────────────────────────────────────────────────────────
 function brick(W, H, s) {
-  const bw  = s.cellSize * 2;
-  const bh  = s.cellSize;
-  const rnd = s.roundness;
-  const lw  = Math.max(1, Math.round(bh * 0.08));
-  ctx.fillStyle = s.color2; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle = s.color1;
-  const rows = Math.ceil(H/bh)+2;
-  for (let row=-1; row<rows; row++) {
-    const off = (row%2)*( bw/2);
-    for (let x=-bw+off; x<W+bw; x+=bw) {
-      const rx=x+lw, ry=row*bh+lw, rw=bw-lw*2, rh2=bh-lw*2;
-      if (rnd > 0) {
-        const r = Math.min(rnd, rw/2, rh2/2);
-        ctx.beginPath();
-        ctx.moveTo(rx+r, ry);
-        ctx.arcTo(rx+rw, ry,    rx+rw, ry+rh2, r);
-        ctx.arcTo(rx+rw, ry+rh2, rx,   ry+rh2, r);
-        ctx.arcTo(rx,    ry+rh2, rx,   ry,      r);
-        ctx.arcTo(rx,    ry,     rx+rw, ry,      r);
-        ctx.closePath(); ctx.fill();
-      } else {
-        ctx.fillRect(rx, ry, rw, rh2);
-      }
+  const bw=s.cellSize*2,bh=s.cellSize,rnd=s.roundness,lw=Math.max(1,Math.round(bh*0.08));
+  ctx.fillStyle=s.color2; ctx.fillRect(0,0,W,H); ctx.fillStyle=s.color1;
+  const rows=Math.ceil(H/bh)+2;
+  for(let row=-1;row<rows;row++){
+    const off=(row%2)*(bw/2);
+    for(let x=-bw+off;x<W+bw;x+=bw){
+      const rx=x+lw,ry=row*bh+lw,rw=bw-lw*2,rh2=bh-lw*2;
+      if(rnd>0){const rd=Math.min(rnd,rw/2,rh2/2);ctx.beginPath();ctx.moveTo(rx+rd,ry);ctx.arcTo(rx+rw,ry,rx+rw,ry+rh2,rd);ctx.arcTo(rx+rw,ry+rh2,rx,ry+rh2,rd);ctx.arcTo(rx,ry+rh2,rx,ry,rd);ctx.arcTo(rx,ry,rx+rw,ry,rd);ctx.closePath();ctx.fill();}
+      else ctx.fillRect(rx,ry,rw,rh2);
     }
   }
 }
 
-// ── 12. Triangles ─────────────────────────────────────────────────────────
+// ─── 13. Triangles ───────────────────────────────────────────────────────────
 function triangles(W, H, s) {
-  const sz   = s.cellSize;
-  const cols = Math.ceil(W/sz)+2, rows = Math.ceil(H/sz)+2;
-  ctx.fillStyle = s.color1; ctx.fillRect(0,0,W,H);
-  for (let row=-1; row<rows; row++) {
-    for (let col=-1; col<cols; col++) {
-      const x = col*sz, y = row*sz;
-      const flip = (row+col)%2===0;
-      ctx.fillStyle = (row+col)%3===0 ? s.color3 : s.color2;
-      ctx.beginPath();
-      if (flip) {
-        ctx.moveTo(x,      y+sz);
-        ctx.lineTo(x+sz/2, y);
-        ctx.lineTo(x+sz,   y+sz);
-      } else {
-        ctx.moveTo(x,      y);
-        ctx.lineTo(x+sz/2, y+sz);
-        ctx.lineTo(x+sz,   y);
-      }
-      ctx.closePath(); ctx.fill();
-    }
+  const sz=s.cellSize;
+  ctx.fillStyle=s.color1; ctx.fillRect(0,0,W,H);
+  for(let r=-1;r<=Math.ceil(H/sz)+1;r++) for(let c=-1;c<=Math.ceil(W/sz)+1;c++){
+    const x=c*sz,y=r*sz,flip=(r+c)%2===0;
+    ctx.fillStyle=(r+c)%3===0?s.color3:s.color2;
+    ctx.beginPath();
+    if(flip){ctx.moveTo(x,y+sz);ctx.lineTo(x+sz/2,y);ctx.lineTo(x+sz,y+sz);}
+    else    {ctx.moveTo(x,y);    ctx.lineTo(x+sz/2,y+sz);ctx.lineTo(x+sz,y);}
+    ctx.closePath(); ctx.fill();
   }
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
+initBorderPicker();
 renderTmplList();
-onTypeChange();   // triggers render
-
-// Update modal hint live while typing
-$('saveFilename').addEventListener('input', () => updateModalHint($('saveFilename').value));
-
-// Auto-update hint on open
-function openSaveModal() {
-  $('saveFilename').value = '';
-  updateModalHint('');
-  $('saveModal').style.display = 'flex';
-  setTimeout(() => $('saveFilename').focus(), 40);
-}
+updateBorderSVG();
+onTypeChange();   // sets control visibility + render
 </script>
 </body>
 </html>
