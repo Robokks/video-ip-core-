@@ -156,9 +156,7 @@ begin
 
           -- Rule 1: falling crossing — was above T1, now below T1
           if prev_above = '1' then
-            if counter_s /= x"FFFF" then  -- saturate, do not wrap
-              counter_s <= counter_s + 1;
-            end if;
+            counter_s <= counter_s + 1;  -- wraps 65535 → 0
           end if;
 
         end if;
