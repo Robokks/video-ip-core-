@@ -66,6 +66,7 @@ entity pal_tv_bram_top is
     csync_o      : out std_logic;
     line_sync_o  : out std_logic;
     frame_sync_o : out std_logic;
+    fss_o        : out std_logic;   -- Field Sync Signal 50 Hz (broad-sync + post-EQ of every field)
     field_o      : out std_logic;
     active_o     : out std_logic;
     blank_o      : out std_logic
@@ -161,6 +162,7 @@ architecture rtl of pal_tv_bram_top is
 
   -- Derived sync outputs
   signal in_vsync_s   : std_logic;
+  signal fss_s        : std_logic;
   signal line_sync_s  : std_logic;
   signal frame_sync_s : std_logic;
 
@@ -616,7 +618,12 @@ begin
                             in_vsync_s = '0'
                   else '0';
 
-  frame_sync_s <= in_vsync_s;
+  frame_sync_s <= '1' when v_cnt <= 7 else '0';   -- 25 Hz, F1 start only
+
+  -- FSS: broad-sync + post-equalising only (excludes pre-eq lines 0-2 / 312-314)
+  fss_s <= '1' when (v_cnt >= 3 and v_cnt <= 7) or
+                    (v_cnt >= 315 and v_cnt <= 319)
+           else '0';
 
   dac_out      <= LEVEL_SYNC   when csync_s = '1' else
                   active_level when active_s = '1' else
@@ -625,8 +632,9 @@ begin
   csync_o      <= csync_s;
   line_sync_o  <= line_sync_s;
   frame_sync_o <= frame_sync_s;
+  fss_o        <= fss_s;
   field_o      <= field_s;
   active_o     <= active_s;
-  blank_o      <= not csync_s and not active_s;
+  blank_o      <= not active_s;   -- HIGH for full 12 µs H-blank + V-blank
 
 end architecture rtl;
