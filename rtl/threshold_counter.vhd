@@ -14,69 +14,56 @@ use ieee.numeric_std.all;
 --   ┌─────────────────────────────────────────────────────┐
 --   │  LabVIEW While Loop                                 │
 --   │                                                     │
---   │  counter_in ─────┐                                  │
---   │  prescaler_in ───┤                                  │
---   │  ms_cnt_in ──────┤   ┌──────────────────┐          │
---   │  prev_above ─────┼──►│ threshold_counter │──► bit_b │
---   │  bit_a_in ───────┤   │  (this IP, comb) │          │
---   │  data_in ────────┤   └────────┬─────────┘          │
---   │  threshold_1 ────┤            │                     │
---   │  threshold_2 ────┤   counter_out ──► [Shift Reg] ──┘
---   │  delay_ms ───────┘   prescaler_out ► [Shift Reg] ──┘
---   │  clear ──────────    ms_cnt_out ──► [Shift Reg] ──┘
---   │                      prev_above_out► [Shift Reg] ──┘
---   │                      bit_a_out ───► [Shift Reg] ──┘
+--   │  counter_in   ──┐                                   │
+--   │  prescaler_in ──┤  ┌──────────────────┐            │
+--   │  ms_cnt_in    ──┼─►│ threshold_counter │──► bit_b  │
+--   │  prev_above   ──┤  │  (comb only)     │            │
+--   │  bit_a_in     ──┘  └──────┬───────────┘            │
+--   │  data_in      ──►         │                         │
+--   │  threshold_1  ──►  counter_out  ──►[Shift Reg]──┐  │
+--   │  threshold_2  ──►  prescaler_out►[Shift Reg]──┐ │  │
+--   │  delay_ms     ──►  ms_cnt_out  ──►[Shift Reg]─┤ │  │
+--   │  clear        ──►  above_t1    ──►[Shift Reg]─┘ │  │
+--   │                    bit_a_out   ──►[Shift Reg]───┘  │
 --   └─────────────────────────────────────────────────────┘
 --
 -- Per-channel rules (priority: clear > Rule 3 > Rule 2 > Rule 1):
 --
---   clear = '1'  →  counter = 0, bit_a = 0 (software reset)
---
---   Rule 1 (INCREMENT):
---     Falling edge of above_t1 (prev_above='1', data_in ≤ T1 now)
---     → counter increments by 1 (wraps 65535 → 0)
---
---   Rule 2 (TIMEOUT RESET):
---     data_in stays > threshold_1 for > delay_ms ms
---     → counter resets to 0
---
---   Rule 3 (T2 RESET — highest priority):
---     data_in < threshold_2  →  counter = 0, bit_a latched '1'
---
---   bit_b = '1' when counter /= 0
+--   clear = '1'  →  counter = 0, bit_a = 0  (software reset)
+--   Rule 1: falling edge of above_t1 → counter + 1 (wraps 65535→0)
+--   Rule 2: data_in > T1 for > delay_ms ms → counter reset to 0
+--   Rule 3: data_in < T2 → counter = 0, bit_a latched '1'
+--   bit_b  = '1' when counter ≠ 0
 --
 -- Fixed-point: Q4.12 signed  (1 sign + 3 integer + 12 fractional bits)
--- Generic CLK_MHZ sets the ms prescaler threshold (default 40 MHz)
+-- Generic CLK_MHZ sets the ms prescaler threshold (10/20/30/40 supported)
 -- ============================================================================
 
 entity threshold_counter is
   generic (
-    CLK_MHZ : integer := 40    -- board clock (10/20/30/40)
+    CLK_MHZ : integer := 40
   );
   port (
     -- ==================================================================
     -- Channel 0
     -- ==================================================================
-    -- Control / data inputs
-    data_in_0      : in  std_logic_vector(15 downto 0);  -- Q4.12 sample
-    threshold_1_0  : in  std_logic_vector(15 downto 0);  -- upper threshold
-    threshold_2_0  : in  std_logic_vector(15 downto 0);  -- lower threshold
-    delay_ms_0     : in  std_logic_vector(15 downto 0);  -- Rule-2 timeout (ms)
-    clear_0        : in  std_logic;                       -- '1' = software reset
-
-    -- State inputs  (wire from LabVIEW shift-register outputs)
+    data_in_0      : in  std_logic_vector(15 downto 0);
+    threshold_1_0  : in  std_logic_vector(15 downto 0);
+    threshold_2_0  : in  std_logic_vector(15 downto 0);
+    delay_ms_0     : in  std_logic_vector(15 downto 0);
+    clear_0        : in  std_logic;
+    -- state inputs (from LabVIEW shift registers)
     counter_in_0   : in  std_logic_vector(15 downto 0);
-    prescaler_in_0 : in  std_logic_vector(15 downto 0);  -- ms prescaler
-    ms_cnt_in_0    : in  std_logic_vector(15 downto 0);  -- ms elapsed counter
-    prev_above_0   : in  std_logic;                       -- above_t1 last cycle
-    bit_a_in_0     : in  std_logic;                       -- latched T2 flag
-
-    -- Next-state outputs  (wire to LabVIEW shift-register inputs)
+    prescaler_in_0 : in  std_logic_vector(15 downto 0);
+    ms_cnt_in_0    : in  std_logic_vector(15 downto 0);
+    prev_above_0   : in  std_logic;
+    bit_a_in_0     : in  std_logic;
+    -- next-state outputs (to LabVIEW shift registers)
     counter_out_0   : out std_logic_vector(15 downto 0);
     prescaler_out_0 : out std_logic_vector(15 downto 0);
     ms_cnt_out_0    : out std_logic_vector(15 downto 0);
-    above_t1_0      : out std_logic;   -- → feed back to prev_above_0
-    bit_a_out_0     : out std_logic;   -- → feed back to bit_a_in_0
+    above_t1_0      : out std_logic;   -- → prev_above_0 next cycle
+    bit_a_out_0     : out std_logic;   -- → bit_a_in_0 next cycle
     bit_b_0         : out std_logic;   -- combinational display
 
     -- ==================================================================
@@ -146,118 +133,76 @@ architecture rtl of threshold_counter is
   constant CLK_PER_MS : integer := CLK_MHZ * 1000;
   constant PRE_MAX    : unsigned(15 downto 0) := to_unsigned(CLK_PER_MS - 1, 16);
 
-  -- -------------------------------------------------------------------------
-  -- Shared next-state procedure (called once per channel per iteration)
-  -- All parameters are values (no signal class) so they work cleanly
-  -- inside combinational processes.
-  -- -------------------------------------------------------------------------
-  procedure ch_next (
-    -- inputs (constant class — read only inside procedure)
-    data_in_p      : in  std_logic_vector(15 downto 0);
-    threshold_1_p  : in  std_logic_vector(15 downto 0);
-    threshold_2_p  : in  std_logic_vector(15 downto 0);
-    delay_ms_p     : in  std_logic_vector(15 downto 0);
-    clear_p        : in  std_logic;
-    counter_in_p   : in  std_logic_vector(15 downto 0);
-    prescaler_in_p : in  std_logic_vector(15 downto 0);
-    ms_cnt_in_p    : in  std_logic_vector(15 downto 0);
-    prev_above_p   : in  std_logic;
-    bit_a_in_p     : in  std_logic;
-    -- outputs declared as signal class so entity port signals can be passed
-    signal counter_out_p   : out std_logic_vector(15 downto 0);
-    signal prescaler_out_p : out std_logic_vector(15 downto 0);
-    signal ms_cnt_out_p    : out std_logic_vector(15 downto 0);
-    signal above_t1_p      : out std_logic;
-    signal bit_a_out_p     : out std_logic;
-    signal bit_b_p         : out std_logic
-  ) is
-    variable above   : boolean;
-    variable below   : boolean;
-    variable ms_tick : boolean;
-    variable pre_v   : unsigned(15 downto 0);
-    variable cnt_v   : unsigned(15 downto 0);
-    variable ms_v    : unsigned(15 downto 0);
-  begin
-    -- Comparisons
-    above   := signed(data_in_p) > signed(threshold_1_p);
-    below   := signed(data_in_p) < signed(threshold_2_p);
-    pre_v   := unsigned(prescaler_in_p);
-    cnt_v   := unsigned(counter_in_p);
-    ms_v    := unsigned(ms_cnt_in_p);
-    ms_tick := above and (pre_v = PRE_MAX);
-
-    -- above_t1 output (shift-register feedback for next cycle)
-    if above then above_t1_p <= '1'; else above_t1_p <= '0'; end if;
-
-    -- bit_b: combinational from current counter
-    if cnt_v /= 0 then bit_b_p <= '1'; else bit_b_p <= '0'; end if;
-
-    -- Prescaler next state
-    if above then
-      if pre_v = PRE_MAX then
-        prescaler_out_p <= (others => '0');
-      else
-        prescaler_out_p <= std_logic_vector(pre_v + 1);
-      end if;
-    else
-      prescaler_out_p <= (others => '0');
-    end if;
-
-    -- Rule priority: clear > Rule 3 > Rule 2 > Rule 1
-    if clear_p = '1' then
-      -- Software reset
-      counter_out_p <= (others => '0');
-      ms_cnt_out_p  <= (others => '0');
-      bit_a_out_p   <= '0';
-
-    elsif below then
-      -- Rule 3: data_in < T2
-      counter_out_p <= (others => '0');
-      ms_cnt_out_p  <= (others => '0');
-      bit_a_out_p   <= '1';
-
-    elsif above then
-      -- data_in > T1: run timeout timer (Rule 2)
-      counter_out_p <= counter_in_p;
-      bit_a_out_p   <= bit_a_in_p;
-      if ms_tick then
-        if ms_v + 1 >= unsigned(delay_ms_p) then
-          -- Rule 2: timeout → reset counter
-          counter_out_p <= (others => '0');
-          ms_cnt_out_p  <= (others => '0');
-        else
-          ms_cnt_out_p <= std_logic_vector(ms_v + 1);
-        end if;
-      else
-        ms_cnt_out_p <= ms_cnt_in_p;   -- hold timer
-      end if;
-
-    else
-      -- T2 ≤ data_in ≤ T1
-      ms_cnt_out_p <= (others => '0');   -- reset timer
-      bit_a_out_p  <= bit_a_in_p;
-      if prev_above_p = '1' then
-        -- Rule 1: falling crossing → increment counter (wraps 65535→0)
-        counter_out_p <= std_logic_vector(cnt_v + 1);
-      else
-        counter_out_p <= counter_in_p;
-      end if;
-
-    end if;
-  end procedure ch_next;
-
 begin
 
   -- =========================================================================
-  -- Channel 0
+  -- Channel 0 — fully inlined combinational process
+  -- (Vivado-compatible: only local variables, signal assignments at end)
   -- =========================================================================
   process(data_in_0, threshold_1_0, threshold_2_0, delay_ms_0, clear_0,
           counter_in_0, prescaler_in_0, ms_cnt_in_0, prev_above_0, bit_a_in_0)
+    variable above, below, ms_tick : boolean;
+    variable pre_v, cnt_v, ms_v    : unsigned(15 downto 0);
+    variable cnt_nxt, pre_nxt,
+             ms_nxt                : std_logic_vector(15 downto 0);
+    variable at1_nxt, ba_nxt,
+             bb_nxt                : std_logic;
   begin
-    ch_next(data_in_0, threshold_1_0, threshold_2_0, delay_ms_0, clear_0,
-            counter_in_0, prescaler_in_0, ms_cnt_in_0, prev_above_0, bit_a_in_0,
-            counter_out_0, prescaler_out_0, ms_cnt_out_0,
-            above_t1_0, bit_a_out_0, bit_b_0);
+    above   := signed(data_in_0) > signed(threshold_1_0);
+    below   := signed(data_in_0) < signed(threshold_2_0);
+    pre_v   := unsigned(prescaler_in_0);
+    cnt_v   := unsigned(counter_in_0);
+    ms_v    := unsigned(ms_cnt_in_0);
+    ms_tick := above and (pre_v = PRE_MAX);
+
+    if above then at1_nxt := '1'; else at1_nxt := '0'; end if;
+    if cnt_v /= 0 then bb_nxt := '1'; else bb_nxt := '0'; end if;
+
+    if above then
+      if pre_v = PRE_MAX then pre_nxt := (others => '0');
+      else                    pre_nxt := std_logic_vector(pre_v + 1);
+      end if;
+    else
+      pre_nxt := (others => '0');
+    end if;
+
+    if clear_0 = '1' then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '0';
+    elsif below then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '1';
+    elsif above then
+      cnt_nxt := counter_in_0;
+      ba_nxt  := bit_a_in_0;
+      if ms_tick then
+        if ms_v + 1 >= unsigned(delay_ms_0) then
+          cnt_nxt := (others => '0');
+          ms_nxt  := (others => '0');
+        else
+          ms_nxt := std_logic_vector(ms_v + 1);
+        end if;
+      else
+        ms_nxt := ms_cnt_in_0;
+      end if;
+    else
+      ms_nxt  := (others => '0');
+      ba_nxt  := bit_a_in_0;
+      if prev_above_0 = '1' then
+        cnt_nxt := std_logic_vector(cnt_v + 1);
+      else
+        cnt_nxt := counter_in_0;
+      end if;
+    end if;
+
+    counter_out_0   <= cnt_nxt;
+    prescaler_out_0 <= pre_nxt;
+    ms_cnt_out_0    <= ms_nxt;
+    above_t1_0      <= at1_nxt;
+    bit_a_out_0     <= ba_nxt;
+    bit_b_0         <= bb_nxt;
   end process;
 
   -- =========================================================================
@@ -265,11 +210,68 @@ begin
   -- =========================================================================
   process(data_in_1, threshold_1_1, threshold_2_1, delay_ms_1, clear_1,
           counter_in_1, prescaler_in_1, ms_cnt_in_1, prev_above_1, bit_a_in_1)
+    variable above, below, ms_tick : boolean;
+    variable pre_v, cnt_v, ms_v    : unsigned(15 downto 0);
+    variable cnt_nxt, pre_nxt,
+             ms_nxt                : std_logic_vector(15 downto 0);
+    variable at1_nxt, ba_nxt,
+             bb_nxt                : std_logic;
   begin
-    ch_next(data_in_1, threshold_1_1, threshold_2_1, delay_ms_1, clear_1,
-            counter_in_1, prescaler_in_1, ms_cnt_in_1, prev_above_1, bit_a_in_1,
-            counter_out_1, prescaler_out_1, ms_cnt_out_1,
-            above_t1_1, bit_a_out_1, bit_b_1);
+    above   := signed(data_in_1) > signed(threshold_1_1);
+    below   := signed(data_in_1) < signed(threshold_2_1);
+    pre_v   := unsigned(prescaler_in_1);
+    cnt_v   := unsigned(counter_in_1);
+    ms_v    := unsigned(ms_cnt_in_1);
+    ms_tick := above and (pre_v = PRE_MAX);
+
+    if above then at1_nxt := '1'; else at1_nxt := '0'; end if;
+    if cnt_v /= 0 then bb_nxt := '1'; else bb_nxt := '0'; end if;
+
+    if above then
+      if pre_v = PRE_MAX then pre_nxt := (others => '0');
+      else                    pre_nxt := std_logic_vector(pre_v + 1);
+      end if;
+    else
+      pre_nxt := (others => '0');
+    end if;
+
+    if clear_1 = '1' then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '0';
+    elsif below then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '1';
+    elsif above then
+      cnt_nxt := counter_in_1;
+      ba_nxt  := bit_a_in_1;
+      if ms_tick then
+        if ms_v + 1 >= unsigned(delay_ms_1) then
+          cnt_nxt := (others => '0');
+          ms_nxt  := (others => '0');
+        else
+          ms_nxt := std_logic_vector(ms_v + 1);
+        end if;
+      else
+        ms_nxt := ms_cnt_in_1;
+      end if;
+    else
+      ms_nxt  := (others => '0');
+      ba_nxt  := bit_a_in_1;
+      if prev_above_1 = '1' then
+        cnt_nxt := std_logic_vector(cnt_v + 1);
+      else
+        cnt_nxt := counter_in_1;
+      end if;
+    end if;
+
+    counter_out_1   <= cnt_nxt;
+    prescaler_out_1 <= pre_nxt;
+    ms_cnt_out_1    <= ms_nxt;
+    above_t1_1      <= at1_nxt;
+    bit_a_out_1     <= ba_nxt;
+    bit_b_1         <= bb_nxt;
   end process;
 
   -- =========================================================================
@@ -277,11 +279,68 @@ begin
   -- =========================================================================
   process(data_in_2, threshold_1_2, threshold_2_2, delay_ms_2, clear_2,
           counter_in_2, prescaler_in_2, ms_cnt_in_2, prev_above_2, bit_a_in_2)
+    variable above, below, ms_tick : boolean;
+    variable pre_v, cnt_v, ms_v    : unsigned(15 downto 0);
+    variable cnt_nxt, pre_nxt,
+             ms_nxt                : std_logic_vector(15 downto 0);
+    variable at1_nxt, ba_nxt,
+             bb_nxt                : std_logic;
   begin
-    ch_next(data_in_2, threshold_1_2, threshold_2_2, delay_ms_2, clear_2,
-            counter_in_2, prescaler_in_2, ms_cnt_in_2, prev_above_2, bit_a_in_2,
-            counter_out_2, prescaler_out_2, ms_cnt_out_2,
-            above_t1_2, bit_a_out_2, bit_b_2);
+    above   := signed(data_in_2) > signed(threshold_1_2);
+    below   := signed(data_in_2) < signed(threshold_2_2);
+    pre_v   := unsigned(prescaler_in_2);
+    cnt_v   := unsigned(counter_in_2);
+    ms_v    := unsigned(ms_cnt_in_2);
+    ms_tick := above and (pre_v = PRE_MAX);
+
+    if above then at1_nxt := '1'; else at1_nxt := '0'; end if;
+    if cnt_v /= 0 then bb_nxt := '1'; else bb_nxt := '0'; end if;
+
+    if above then
+      if pre_v = PRE_MAX then pre_nxt := (others => '0');
+      else                    pre_nxt := std_logic_vector(pre_v + 1);
+      end if;
+    else
+      pre_nxt := (others => '0');
+    end if;
+
+    if clear_2 = '1' then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '0';
+    elsif below then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '1';
+    elsif above then
+      cnt_nxt := counter_in_2;
+      ba_nxt  := bit_a_in_2;
+      if ms_tick then
+        if ms_v + 1 >= unsigned(delay_ms_2) then
+          cnt_nxt := (others => '0');
+          ms_nxt  := (others => '0');
+        else
+          ms_nxt := std_logic_vector(ms_v + 1);
+        end if;
+      else
+        ms_nxt := ms_cnt_in_2;
+      end if;
+    else
+      ms_nxt  := (others => '0');
+      ba_nxt  := bit_a_in_2;
+      if prev_above_2 = '1' then
+        cnt_nxt := std_logic_vector(cnt_v + 1);
+      else
+        cnt_nxt := counter_in_2;
+      end if;
+    end if;
+
+    counter_out_2   <= cnt_nxt;
+    prescaler_out_2 <= pre_nxt;
+    ms_cnt_out_2    <= ms_nxt;
+    above_t1_2      <= at1_nxt;
+    bit_a_out_2     <= ba_nxt;
+    bit_b_2         <= bb_nxt;
   end process;
 
   -- =========================================================================
@@ -289,11 +348,68 @@ begin
   -- =========================================================================
   process(data_in_3, threshold_1_3, threshold_2_3, delay_ms_3, clear_3,
           counter_in_3, prescaler_in_3, ms_cnt_in_3, prev_above_3, bit_a_in_3)
+    variable above, below, ms_tick : boolean;
+    variable pre_v, cnt_v, ms_v    : unsigned(15 downto 0);
+    variable cnt_nxt, pre_nxt,
+             ms_nxt                : std_logic_vector(15 downto 0);
+    variable at1_nxt, ba_nxt,
+             bb_nxt                : std_logic;
   begin
-    ch_next(data_in_3, threshold_1_3, threshold_2_3, delay_ms_3, clear_3,
-            counter_in_3, prescaler_in_3, ms_cnt_in_3, prev_above_3, bit_a_in_3,
-            counter_out_3, prescaler_out_3, ms_cnt_out_3,
-            above_t1_3, bit_a_out_3, bit_b_3);
+    above   := signed(data_in_3) > signed(threshold_1_3);
+    below   := signed(data_in_3) < signed(threshold_2_3);
+    pre_v   := unsigned(prescaler_in_3);
+    cnt_v   := unsigned(counter_in_3);
+    ms_v    := unsigned(ms_cnt_in_3);
+    ms_tick := above and (pre_v = PRE_MAX);
+
+    if above then at1_nxt := '1'; else at1_nxt := '0'; end if;
+    if cnt_v /= 0 then bb_nxt := '1'; else bb_nxt := '0'; end if;
+
+    if above then
+      if pre_v = PRE_MAX then pre_nxt := (others => '0');
+      else                    pre_nxt := std_logic_vector(pre_v + 1);
+      end if;
+    else
+      pre_nxt := (others => '0');
+    end if;
+
+    if clear_3 = '1' then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '0';
+    elsif below then
+      cnt_nxt := (others => '0');
+      ms_nxt  := (others => '0');
+      ba_nxt  := '1';
+    elsif above then
+      cnt_nxt := counter_in_3;
+      ba_nxt  := bit_a_in_3;
+      if ms_tick then
+        if ms_v + 1 >= unsigned(delay_ms_3) then
+          cnt_nxt := (others => '0');
+          ms_nxt  := (others => '0');
+        else
+          ms_nxt := std_logic_vector(ms_v + 1);
+        end if;
+      else
+        ms_nxt := ms_cnt_in_3;
+      end if;
+    else
+      ms_nxt  := (others => '0');
+      ba_nxt  := bit_a_in_3;
+      if prev_above_3 = '1' then
+        cnt_nxt := std_logic_vector(cnt_v + 1);
+      else
+        cnt_nxt := counter_in_3;
+      end if;
+    end if;
+
+    counter_out_3   <= cnt_nxt;
+    prescaler_out_3 <= pre_nxt;
+    ms_cnt_out_3    <= ms_nxt;
+    above_t1_3      <= at1_nxt;
+    bit_a_out_3     <= ba_nxt;
+    bit_b_3         <= bb_nxt;
   end process;
 
 end architecture rtl;
