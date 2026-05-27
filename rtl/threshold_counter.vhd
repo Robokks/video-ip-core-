@@ -5,8 +5,13 @@ use work.threshold_counter_pkg.all;
 
 -- Threshold Counter IP  —  4-channel version
 --
--- Each of the TC_NUM_CH (=4) channels operates independently with its own
--- data_in, threshold_1, threshold_2, delay_ms, counter_o, bit_a and bit_b.
+-- LabVIEW FPGA IP Integration Node requires ALL ports to be std_logic or
+-- std_logic_vector.  Array-type ports are therefore expanded into four
+-- individual std_logic_vector(15 downto 0) signals per bus, named _0 .. _3.
+-- Internally the architecture still uses word16_array_t for conciseness.
+--
+-- Port naming convention:
+--   <signal>_<channel>   e.g.  data_in_0, counter_o_2, bit_a_1
 --
 -- Per-channel rules (priority: Rule 3 > Rule 2 > Rule 1):
 --
@@ -32,19 +37,44 @@ entity threshold_counter is
     CLK_MHZ : integer := 40
   );
   port (
-    clk         : in  std_logic;
-    rst         : in  std_logic;   -- synchronous reset, active-high
+    clk : in  std_logic;
+    rst : in  std_logic;   -- synchronous reset, active-high
 
-    -- Per-channel inputs (Q4.12 signed fixed-point)
-    data_in     : in  word16_array_t;   -- signal values
-    threshold_1 : in  word16_array_t;   -- upper threshold
-    threshold_2 : in  word16_array_t;   -- lower threshold
-    delay_ms    : in  word16_array_t;   -- timeout (integer ms, 0-65535)
+    -- Channel 0 (Q4.12 signed fixed-point)
+    data_in_0     : in  std_logic_vector(15 downto 0);
+    threshold_1_0 : in  std_logic_vector(15 downto 0);
+    threshold_2_0 : in  std_logic_vector(15 downto 0);
+    delay_ms_0    : in  std_logic_vector(15 downto 0);
+    counter_o_0   : out std_logic_vector(15 downto 0);
+    bit_a_0       : out std_logic;
+    bit_b_0       : out std_logic;
 
-    -- Per-channel outputs
-    counter_o   : out word16_array_t;                         -- 16-bit counters
-    bit_a       : out std_logic_vector(TC_NUM_CH-1 downto 0); -- T2 latch flags
-    bit_b       : out std_logic_vector(TC_NUM_CH-1 downto 0)  -- counter-nonzero flags
+    -- Channel 1
+    data_in_1     : in  std_logic_vector(15 downto 0);
+    threshold_1_1 : in  std_logic_vector(15 downto 0);
+    threshold_2_1 : in  std_logic_vector(15 downto 0);
+    delay_ms_1    : in  std_logic_vector(15 downto 0);
+    counter_o_1   : out std_logic_vector(15 downto 0);
+    bit_a_1       : out std_logic;
+    bit_b_1       : out std_logic;
+
+    -- Channel 2
+    data_in_2     : in  std_logic_vector(15 downto 0);
+    threshold_1_2 : in  std_logic_vector(15 downto 0);
+    threshold_2_2 : in  std_logic_vector(15 downto 0);
+    delay_ms_2    : in  std_logic_vector(15 downto 0);
+    counter_o_2   : out std_logic_vector(15 downto 0);
+    bit_a_2       : out std_logic;
+    bit_b_2       : out std_logic;
+
+    -- Channel 3
+    data_in_3     : in  std_logic_vector(15 downto 0);
+    threshold_1_3 : in  std_logic_vector(15 downto 0);
+    threshold_2_3 : in  std_logic_vector(15 downto 0);
+    delay_ms_3    : in  std_logic_vector(15 downto 0);
+    counter_o_3   : out std_logic_vector(15 downto 0);
+    bit_a_3       : out std_logic;
+    bit_b_3       : out std_logic
   );
 end entity threshold_counter;
 
@@ -53,36 +83,74 @@ architecture rtl of threshold_counter is
   constant CLK_PER_MS : integer := CLK_MHZ * 1000;   -- cycles per ms (40 000 at 40 MHz)
 
   -- -------------------------------------------------------------------------
-  -- Per-channel internal signal arrays
+  -- Gather flat ports into internal arrays (only std_logic_vector at the
+  -- boundary; arrays are an implementation detail)
+  -- -------------------------------------------------------------------------
+  signal data_in_s     : word16_array_t;
+  signal threshold_1_s : word16_array_t;
+  signal threshold_2_s : word16_array_t;
+  signal delay_ms_s    : word16_array_t;
+  signal counter_s_slv : word16_array_t;
+  signal bit_a_s_vec   : std_logic_vector(TC_NUM_CH-1 downto 0);
+  signal bit_b_s_vec   : std_logic_vector(TC_NUM_CH-1 downto 0);
+
+  -- -------------------------------------------------------------------------
+  -- Per-channel internal signals
   -- -------------------------------------------------------------------------
   type bool_array_t   is array (0 to TC_NUM_CH-1) of boolean;
   type uint16_array_t is array (0 to TC_NUM_CH-1) of unsigned(15 downto 0);
   type pre_array_t    is array (0 to TC_NUM_CH-1) of integer range 0 to CLK_PER_MS-1;
   type sl_array_t     is array (0 to TC_NUM_CH-1) of std_logic;
 
-  signal above_t1   : bool_array_t;   -- data_in > threshold_1  (combinational)
-  signal below_t2   : bool_array_t;   -- data_in < threshold_2  (combinational)
-  signal ms_tick_c  : sl_array_t;     -- '1' once per ms while above_t1 (combinational)
+  signal above_t1   : bool_array_t;
+  signal below_t2   : bool_array_t;
+  signal ms_tick_c  : sl_array_t;
 
   signal prescaler  : pre_array_t    := (others => 0);
   signal ms_counter : uint16_array_t := (others => (others => '0'));
   signal prev_above : std_logic_vector(TC_NUM_CH-1 downto 0) := (others => '0');
   signal counter_s  : uint16_array_t := (others => (others => '0'));
-  signal bit_a_s    : std_logic_vector(TC_NUM_CH-1 downto 0) := (others => '0');
+  signal bit_a_lat  : std_logic_vector(TC_NUM_CH-1 downto 0) := (others => '0');
 
 begin
 
   -- -------------------------------------------------------------------------
-  -- Combinational: per-channel comparisons, ms tick, and output wiring
+  -- Port fan-in: flat ports → internal arrays
+  -- -------------------------------------------------------------------------
+  data_in_s(0)     <= data_in_0;     data_in_s(1)     <= data_in_1;
+  data_in_s(2)     <= data_in_2;     data_in_s(3)     <= data_in_3;
+
+  threshold_1_s(0) <= threshold_1_0; threshold_1_s(1) <= threshold_1_1;
+  threshold_1_s(2) <= threshold_1_2; threshold_1_s(3) <= threshold_1_3;
+
+  threshold_2_s(0) <= threshold_2_0; threshold_2_s(1) <= threshold_2_1;
+  threshold_2_s(2) <= threshold_2_2; threshold_2_s(3) <= threshold_2_3;
+
+  delay_ms_s(0)    <= delay_ms_0;    delay_ms_s(1)    <= delay_ms_1;
+  delay_ms_s(2)    <= delay_ms_2;    delay_ms_s(3)    <= delay_ms_3;
+
+  -- -------------------------------------------------------------------------
+  -- Port fan-out: internal arrays → flat ports
+  -- -------------------------------------------------------------------------
+  counter_o_0 <= counter_s_slv(0);  counter_o_1 <= counter_s_slv(1);
+  counter_o_2 <= counter_s_slv(2);  counter_o_3 <= counter_s_slv(3);
+
+  bit_a_0 <= bit_a_s_vec(0);  bit_a_1 <= bit_a_s_vec(1);
+  bit_a_2 <= bit_a_s_vec(2);  bit_a_3 <= bit_a_s_vec(3);
+
+  bit_b_0 <= bit_b_s_vec(0);  bit_b_1 <= bit_b_s_vec(1);
+  bit_b_2 <= bit_b_s_vec(2);  bit_b_3 <= bit_b_s_vec(3);
+
+  -- -------------------------------------------------------------------------
+  -- Combinational: per-channel comparisons, ms tick, output wiring
   -- -------------------------------------------------------------------------
   gen_comb : for i in 0 to TC_NUM_CH-1 generate
-    above_t1(i)  <= signed(data_in(i)) > signed(threshold_1(i));
-    below_t2(i)  <= signed(data_in(i)) < signed(threshold_2(i));
-    ms_tick_c(i) <= '1' when (above_t1(i) and prescaler(i) = CLK_PER_MS-1) else '0';
-
-    counter_o(i) <= std_logic_vector(counter_s(i));
-    bit_a(i)     <= bit_a_s(i);
-    bit_b(i)     <= '1' when counter_s(i) /= 0 else '0';
+    above_t1(i)      <= signed(data_in_s(i)) > signed(threshold_1_s(i));
+    below_t2(i)      <= signed(data_in_s(i)) < signed(threshold_2_s(i));
+    ms_tick_c(i)     <= '1' when (above_t1(i) and prescaler(i) = CLK_PER_MS-1) else '0';
+    counter_s_slv(i) <= std_logic_vector(counter_s(i));
+    bit_a_s_vec(i)   <= bit_a_lat(i);
+    bit_b_s_vec(i)   <= '1' when counter_s(i) /= 0 else '0';
   end generate;
 
   -- -------------------------------------------------------------------------
@@ -96,45 +164,38 @@ begin
         prescaler   <= (others => 0);
         ms_counter  <= (others => (others => '0'));
         counter_s   <= (others => (others => '0'));
-        bit_a_s     <= (others => '0');
+        bit_a_lat   <= (others => '0');
 
       else
 
         for i in 0 to TC_NUM_CH-1 loop
 
           -- Register above_t1 for falling-edge detection next cycle
-          if above_t1(i) then
-            prev_above(i) <= '1';
-          else
-            prev_above(i) <= '0';
+          if above_t1(i) then prev_above(i) <= '1';
+          else                 prev_above(i) <= '0';
           end if;
 
           -- Prescaler: counts while above_t1, resets otherwise
           if above_t1(i) then
-            if prescaler(i) = CLK_PER_MS-1 then
-              prescaler(i) <= 0;
-            else
-              prescaler(i) <= prescaler(i) + 1;
+            if prescaler(i) = CLK_PER_MS-1 then prescaler(i) <= 0;
+            else                                 prescaler(i) <= prescaler(i) + 1;
             end if;
           else
             prescaler(i) <= 0;
           end if;
 
-          -- ---------------------------------------------------------------
           -- Rule priority: Rule 3 > Rule 2 > Rule 1
-          -- ---------------------------------------------------------------
           if below_t2(i) then
             -- Rule 3: data_in < threshold_2
             counter_s(i)  <= (others => '0');
-            bit_a_s(i)    <= '1';
+            bit_a_lat(i)  <= '1';
             ms_counter(i) <= (others => '0');
 
           elsif above_t1(i) then
             -- data_in > threshold_1: run timeout timer
             if ms_tick_c(i) = '1' then
-              if ms_counter(i) + 1 >= unsigned(delay_ms(i)) then
-                -- Rule 2: timeout → reset counter
-                counter_s(i)  <= (others => '0');
+              if ms_counter(i) + 1 >= unsigned(delay_ms_s(i)) then
+                counter_s(i)  <= (others => '0');   -- Rule 2: timeout
                 ms_counter(i) <= (others => '0');
               else
                 ms_counter(i) <= ms_counter(i) + 1;
@@ -143,11 +204,9 @@ begin
 
           else
             -- data_in between threshold_2 and threshold_1
-            ms_counter(i) <= (others => '0');   -- clear timer
-
-            -- Rule 1: falling crossing
+            ms_counter(i) <= (others => '0');
             if prev_above(i) = '1' then
-              counter_s(i) <= counter_s(i) + 1;  -- wraps 65535 → 0
+              counter_s(i) <= counter_s(i) + 1;     -- Rule 1: falling crossing
             end if;
 
           end if;
