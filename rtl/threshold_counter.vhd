@@ -1,175 +1,161 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use work.threshold_counter_pkg.all;
 
--- Threshold Counter IP
--- Monitors a Q4.12 signed fixed-point input against two thresholds.
+-- Threshold Counter IP  —  4-channel version
 --
--- Rule 1 (INCREMENT):
---   When data_in crosses from above threshold_1 to below threshold_1
---   (falling edge), counter is incremented by 1.
+-- Each of the TC_NUM_CH (=4) channels operates independently with its own
+-- data_in, threshold_1, threshold_2, delay_ms, counter_o, bit_a and bit_b.
 --
--- Rule 2 (TIMEOUT RESET):
---   If data_in stays continuously above threshold_1 for more than
---   delay_ms milliseconds, counter is reset to 0.
+-- Per-channel rules (priority: Rule 3 > Rule 2 > Rule 1):
 --
--- Rule 3 (THRESHOLD-2 RESET — highest priority):
---   Whenever data_in < threshold_2, counter is reset to 0 and
---   bit_a is latched high (remains '1' until rst).
+--   Rule 1 (INCREMENT):
+--     When data_in crosses from above threshold_1 to below threshold_1
+--     (falling edge), counter increments by 1.  At 65535 it wraps to 0.
 --
--- bit_b is a combinational flag:
---   bit_b = '1'  when counter /= 0
---   bit_b = '0'  when counter  = 0
+--   Rule 2 (TIMEOUT RESET):
+--     If data_in stays continuously above threshold_1 for more than
+--     delay_ms milliseconds, counter resets to 0.
 --
--- Priority when rules overlap: Rule 3 > Rule 2 > Rule 1
+--   Rule 3 (T2 RESET — highest priority):
+--     Whenever data_in < threshold_2, counter resets to 0 and bit_a is
+--     latched '1' (stays high until rst).
 --
--- Generics:
---   CLK_MHZ : input clock frequency (10 / 20 / 30 / 40)
+--   bit_b = '1' when counter /= 0,  '0' when counter = 0.
 --
--- Fixed-point format: Q4.12 signed
---   Bit 15        : sign
---   Bits 14..12   : integer part  (3 bits, range -8 to +7)
---   Bits 11..0    : fractional part (resolution = 1/4096 ≈ 0.000244)
+-- Fixed-point format: Q4.12 signed  (1 sign + 3 integer + 12 fractional bits)
+-- Generic: CLK_MHZ  — input clock frequency (10 / 20 / 30 / 40)
 
 entity threshold_counter is
   generic (
-    CLK_MHZ : integer := 40          -- input clock frequency in MHz
+    CLK_MHZ : integer := 40
   );
   port (
-    clk         : in  std_logic;     -- input clock
-    rst         : in  std_logic;     -- synchronous reset, active-high
+    clk         : in  std_logic;
+    rst         : in  std_logic;   -- synchronous reset, active-high
 
-    -- Signal input and thresholds (Q4.12 signed fixed-point)
-    data_in     : in  std_logic_vector(15 downto 0);
-    threshold_1 : in  std_logic_vector(15 downto 0);
-    threshold_2 : in  std_logic_vector(15 downto 0);
+    -- Per-channel inputs (Q4.12 signed fixed-point)
+    data_in     : in  word16_array_t;   -- signal values
+    threshold_1 : in  word16_array_t;   -- upper threshold
+    threshold_2 : in  word16_array_t;   -- lower threshold
+    delay_ms    : in  word16_array_t;   -- timeout (integer ms, 0-65535)
 
-    -- Timeout: counter resets if data_in stays > threshold_1 for this many ms
-    delay_ms    : in  std_logic_vector(15 downto 0);
-
-    -- Outputs
-    counter_o   : out std_logic_vector(15 downto 0); -- 16-bit event counter
-    bit_a       : out std_logic;  -- latched '1' when data_in < threshold_2
-    bit_b       : out std_logic   -- '1' when counter /= 0
+    -- Per-channel outputs
+    counter_o   : out word16_array_t;                         -- 16-bit counters
+    bit_a       : out std_logic_vector(TC_NUM_CH-1 downto 0); -- T2 latch flags
+    bit_b       : out std_logic_vector(TC_NUM_CH-1 downto 0)  -- counter-nonzero flags
   );
 end entity threshold_counter;
 
 architecture rtl of threshold_counter is
 
-  -- Clock cycles per millisecond
-  constant CLK_PER_MS : integer := CLK_MHZ * 1000;
+  constant CLK_PER_MS : integer := CLK_MHZ * 1000;   -- cycles per ms (40 000 at 40 MHz)
 
   -- -------------------------------------------------------------------------
-  -- Combinational threshold comparisons (signed Q4.12)
+  -- Per-channel internal signal arrays
   -- -------------------------------------------------------------------------
-  signal above_t1 : boolean;   -- data_in >  threshold_1
-  signal below_t2 : boolean;   -- data_in <  threshold_2
+  type bool_array_t   is array (0 to TC_NUM_CH-1) of boolean;
+  type uint16_array_t is array (0 to TC_NUM_CH-1) of unsigned(15 downto 0);
+  type pre_array_t    is array (0 to TC_NUM_CH-1) of integer range 0 to CLK_PER_MS-1;
+  type sl_array_t     is array (0 to TC_NUM_CH-1) of std_logic;
 
-  -- -------------------------------------------------------------------------
-  -- Millisecond tick generation
-  -- Prescaler counts CLK_PER_MS cycles while above_t1; ms_tick_c pulses once
-  -- per ms during that period.
-  -- -------------------------------------------------------------------------
-  signal prescaler  : integer range 0 to CLK_PER_MS - 1 := 0;
-  signal ms_tick_c  : std_logic;   -- combinational: '1' for 1 clock each ms
+  signal above_t1   : bool_array_t;   -- data_in > threshold_1  (combinational)
+  signal below_t2   : bool_array_t;   -- data_in < threshold_2  (combinational)
+  signal ms_tick_c  : sl_array_t;     -- '1' once per ms while above_t1 (combinational)
 
-  -- Elapsed-ms counter (counts how long data_in has been above threshold_1)
-  signal ms_counter : unsigned(15 downto 0) := (others => '0');
-
-  -- -------------------------------------------------------------------------
-  -- Registered signals
-  -- -------------------------------------------------------------------------
-  signal prev_above : std_logic              := '0';  -- above_t1 one cycle ago
-  signal counter_s  : unsigned(15 downto 0) := (others => '0');
-  signal bit_a_s    : std_logic              := '0';
+  signal prescaler  : pre_array_t    := (others => 0);
+  signal ms_counter : uint16_array_t := (others => (others => '0'));
+  signal prev_above : std_logic_vector(TC_NUM_CH-1 downto 0) := (others => '0');
+  signal counter_s  : uint16_array_t := (others => (others => '0'));
+  signal bit_a_s    : std_logic_vector(TC_NUM_CH-1 downto 0) := (others => '0');
 
 begin
 
   -- -------------------------------------------------------------------------
-  -- Combinational
+  -- Combinational: per-channel comparisons, ms tick, and output wiring
   -- -------------------------------------------------------------------------
-  above_t1  <= signed(data_in) > signed(threshold_1);
-  below_t2  <= signed(data_in) < signed(threshold_2);
+  gen_comb : for i in 0 to TC_NUM_CH-1 generate
+    above_t1(i)  <= signed(data_in(i)) > signed(threshold_1(i));
+    below_t2(i)  <= signed(data_in(i)) < signed(threshold_2(i));
+    ms_tick_c(i) <= '1' when (above_t1(i) and prescaler(i) = CLK_PER_MS-1) else '0';
 
-  -- ms_tick fires once per ms when prescaler reaches its top while above_t1
-  ms_tick_c <= '1' when (above_t1 and prescaler = CLK_PER_MS - 1) else '0';
+    counter_o(i) <= std_logic_vector(counter_s(i));
+    bit_a(i)     <= bit_a_s(i);
+    bit_b(i)     <= '1' when counter_s(i) /= 0 else '0';
+  end generate;
 
   -- -------------------------------------------------------------------------
-  -- Main clocked process
+  -- Clocked process — all 4 channels in a for-loop
   -- -------------------------------------------------------------------------
   process(clk)
   begin
     if rising_edge(clk) then
       if rst = '1' then
-        prev_above <= '0';
-        prescaler  <= 0;
-        ms_counter <= (others => '0');
-        counter_s  <= (others => '0');
-        bit_a_s    <= '0';
+        prev_above  <= (others => '0');
+        prescaler   <= (others => 0);
+        ms_counter  <= (others => (others => '0'));
+        counter_s   <= (others => (others => '0'));
+        bit_a_s     <= (others => '0');
 
       else
-        -- Register above_t1 for falling-edge detection in the next cycle
-        if above_t1 then
-          prev_above <= '1';
-        else
-          prev_above <= '0';
-        end if;
 
-        -- Prescaler: counts while above_t1, resets when not above_t1
-        if above_t1 then
-          if prescaler = CLK_PER_MS - 1 then
-            prescaler <= 0;
+        for i in 0 to TC_NUM_CH-1 loop
+
+          -- Register above_t1 for falling-edge detection next cycle
+          if above_t1(i) then
+            prev_above(i) <= '1';
           else
-            prescaler <= prescaler + 1;
+            prev_above(i) <= '0';
           end if;
-        else
-          prescaler <= 0;
-        end if;
 
-        -- -------------------------------------------------------------------
-        -- Rule priority: Rule 3 > Rule 2 > Rule 1
-        -- -------------------------------------------------------------------
-
-        if below_t2 then
-          -- Rule 3 (highest priority)
-          -- data_in < threshold_2 → reset counter, latch bit_a, clear timer
-          counter_s  <= (others => '0');
-          bit_a_s    <= '1';
-          ms_counter <= (others => '0');
-
-        elsif above_t1 then
-          -- data_in > threshold_1 → run timeout timer
-          if ms_tick_c = '1' then
-            if ms_counter + 1 >= unsigned(delay_ms) then
-              -- Rule 2: timeout → reset counter, restart timer
-              counter_s  <= (others => '0');
-              ms_counter <= (others => '0');
+          -- Prescaler: counts while above_t1, resets otherwise
+          if above_t1(i) then
+            if prescaler(i) = CLK_PER_MS-1 then
+              prescaler(i) <= 0;
             else
-              ms_counter <= ms_counter + 1;
+              prescaler(i) <= prescaler(i) + 1;
             end if;
+          else
+            prescaler(i) <= 0;
           end if;
 
-        else
-          -- data_in is between threshold_2 and threshold_1 (inclusive)
-          -- Clear elapsed-ms timer
-          ms_counter <= (others => '0');
+          -- ---------------------------------------------------------------
+          -- Rule priority: Rule 3 > Rule 2 > Rule 1
+          -- ---------------------------------------------------------------
+          if below_t2(i) then
+            -- Rule 3: data_in < threshold_2
+            counter_s(i)  <= (others => '0');
+            bit_a_s(i)    <= '1';
+            ms_counter(i) <= (others => '0');
 
-          -- Rule 1: falling crossing — was above T1, now below T1
-          if prev_above = '1' then
-            counter_s <= counter_s + 1;  -- wraps 65535 → 0
+          elsif above_t1(i) then
+            -- data_in > threshold_1: run timeout timer
+            if ms_tick_c(i) = '1' then
+              if ms_counter(i) + 1 >= unsigned(delay_ms(i)) then
+                -- Rule 2: timeout → reset counter
+                counter_s(i)  <= (others => '0');
+                ms_counter(i) <= (others => '0');
+              else
+                ms_counter(i) <= ms_counter(i) + 1;
+              end if;
+            end if;
+
+          else
+            -- data_in between threshold_2 and threshold_1
+            ms_counter(i) <= (others => '0');   -- clear timer
+
+            -- Rule 1: falling crossing
+            if prev_above(i) = '1' then
+              counter_s(i) <= counter_s(i) + 1;  -- wraps 65535 → 0
+            end if;
+
           end if;
 
-        end if;
+        end loop;
 
       end if;
     end if;
   end process;
-
-  -- -------------------------------------------------------------------------
-  -- Output drivers
-  -- -------------------------------------------------------------------------
-  counter_o <= std_logic_vector(counter_s);
-  bit_a     <= bit_a_s;
-  bit_b     <= '1' when counter_s /= 0 else '0';
 
 end architecture rtl;
