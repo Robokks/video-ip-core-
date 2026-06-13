@@ -13,8 +13,8 @@ use ieee.numeric_std.all;
 -- sel 2  Horizontal gradient  (10 grey steps, ends white)
 -- sel 3  Vertical gradient    (10 grey steps, ends white)
 -- sel 4  BRAM pixel source    (0=black_lvl, 1=brightness)
--- sel 5  Horizontal gradient, black end  (zones 0-8 same as sel=2, zone 9 = black)
--- sel 6  Vertical gradient,   black end  (zones 0-8 same as sel=3, zone 9 = black)
+-- sel 5  Horizontal gradient, black end  (10 grey steps + 1 black zone = 11 zones)
+-- sel 6  Vertical gradient,   black end  (10 grey steps + 1 black zone = 11 zones)
 --
 -- BRAM pixel layout (sel 4):
 --   Write image rows 0,1,2,...,575 sequentially into the BRAM.
@@ -86,6 +86,10 @@ architecture rtl of pal_tv_bram_lite_v2 is
   constant GZONES     : integer := 10;
   constant GZONE_W    : integer := H_ACTIVE  / GZONES;      -- 52
   constant GZONE_H    : integer := V_ACTIVE_F / GZONES;     -- 28
+  -- sel 5/6: 11-zone gradient (10 grey + 1 black end)
+  constant GZONES_B   : integer := 11;
+  constant GZONE_W_B  : integer := H_ACTIVE  / GZONES_B;   -- 47
+  constant GZONE_H_B  : integer := V_ACTIVE_F / GZONES_B;  -- 26
 
   type zone_kind    is (Z_BLACK, Z_WHITE, Z_STRIPE);
   type zone_table_t is array (0 to NUM_ZONES - 1) of zone_kind;
@@ -141,11 +145,16 @@ architecture rtl of pal_tv_bram_lite_v2 is
   signal stripe_cnt_h : integer range 0 to STRIPE_W - 1  := 0;
   signal stripe_ph_h  : std_logic                        := '0';
 
-  -- Gradient counters
+  -- Gradient counters (sel 2/3, 10 zones)
   signal gzx_idx : integer range 0 to GZONES - 1  := 0;
   signal gpx_in  : integer range 0 to GZONE_W - 1 := 0;
   signal gzy_idx : integer range 0 to GZONES - 1  := 0;
   signal gln_in  : integer range 0 to GZONE_H - 1 := 0;
+  -- Gradient-B counters (sel 5/6, 11 zones)
+  signal gbzx_idx : integer range 0 to GZONES_B - 1 := 0;
+  signal gbpx_in  : integer range 0 to GZONE_W_B - 1 := 0;
+  signal gbzy_idx : integer range 0 to GZONES_B - 1 := 0;
+  signal gbln_in  : integer range 0 to GZONE_H_B - 1 := 0;
 
   -- Pattern outputs
   signal color_v      : std_logic;
@@ -160,7 +169,7 @@ architecture rtl of pal_tv_bram_lite_v2 is
   signal black_s       : std_logic_vector(3 downto 0);
   signal grad_x_s      : std_logic_vector(3 downto 0);
   signal grad_y_s      : std_logic_vector(3 downto 0);
-  -- Gradient-with-black-end: last zone (index 9) forced to black_s
+  -- sel 5/6 gradient levels (zones 0-9 = grey steps, zone 10 = black)
   signal grad_xb_s     : std_logic_vector(3 downto 0);
   signal grad_yb_s     : std_logic_vector(3 downto 0);
 
@@ -292,6 +301,49 @@ begin
   end process;
 
   -- -------------------------------------------------------------------------
+  -- Horizontal gradient-B generator (11 zones, sel 5)
+  -- -------------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        gbzx_idx <= 0; gbpx_in <= 0;
+      elsif ce_s = '1' then
+        if h_cnt = H_ACT_S - 1 and in_any_active then
+          gbzx_idx <= 0; gbpx_in <= 0;
+        elsif active_s = '1' then
+          if gbpx_in = GZONE_W_B - 1 then
+            if gbzx_idx < GZONES_B - 1 then gbzx_idx <= gbzx_idx + 1; end if;
+            gbpx_in <= 0;
+          else gbpx_in <= gbpx_in + 1; end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -------------------------------------------------------------------------
+  -- Vertical gradient-B generator (11 zones, sel 6)
+  -- -------------------------------------------------------------------------
+  process(clk)
+  begin
+    if rising_edge(clk) then
+      if rst = '1' then
+        gbzy_idx <= 0; gbln_in <= 0;
+      elsif ce_s = '1' then
+        if (v_cnt = V_FRAME_S - 1 or v_cnt = V_ACT_S_F2 - 1) and
+           h_cnt = H_TOTAL - 1 then
+          gbzy_idx <= 0; gbln_in <= 0;
+        elsif in_any_active and h_cnt = H_TOTAL - 1 then
+          if gbln_in = GZONE_H_B - 1 then
+            if gbzy_idx < GZONES_B - 1 then gbzy_idx <= gbzy_idx + 1; end if;
+            gbln_in <= 0;
+          else gbln_in <= gbln_in + 1; end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  -- -------------------------------------------------------------------------
   -- BRAM write (synchronous, single buffer)
   -- -------------------------------------------------------------------------
   bram_len_i <= BRAM_DEPTH
@@ -384,6 +436,28 @@ begin
     grad_y_s <= std_logic_vector(to_unsigned(ly, 4));
   end process;
 
+  -- sel 5/6: zones 0-9 use the 10-step gradient formula; zone 10 = black
+  process(white_level_i, black_level_i, gbzx_idx, gbzy_idx)
+    variable rng    : integer range 0 to 11;
+    variable lx, ly : integer range 0 to 15;
+  begin
+    rng := white_level_i - black_level_i;
+    if gbzx_idx >= GZONES or rng = 0 then
+      lx := black_level_i;
+    else
+      lx := black_level_i + (gbzx_idx * rng + 4) / 9;
+      if lx > 15 then lx := 15; end if;
+    end if;
+    if gbzy_idx >= GZONES or rng = 0 then
+      ly := black_level_i;
+    else
+      ly := black_level_i + (gbzy_idx * rng + 4) / 9;
+      if ly > 15 then ly := 15; end if;
+    end if;
+    grad_xb_s <= std_logic_vector(to_unsigned(lx, 4));
+    grad_yb_s <= std_logic_vector(to_unsigned(ly, 4));
+  end process;
+
   -- -------------------------------------------------------------------------
   -- Active-level mux  (sel 0..6; anything else -> black)
   -- -------------------------------------------------------------------------
@@ -391,10 +465,6 @@ begin
     color_v <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_v when Z_STRIPE;
   with ZONE_TABLE(zone_idx_h) select
     color_h <= '0' when Z_BLACK, '1' when Z_WHITE, stripe_ph_h when Z_STRIPE;
-
-  -- sel 5/6: same as sel 2/3 but last zone (index 9) = black
-  grad_xb_s <= black_s when gzx_idx = GZONES - 1 else grad_x_s;
-  grad_yb_s <= black_s when gzy_idx = GZONES - 1 else grad_y_s;
 
   active_level <= bram_level  when sel_i = 4 else
                   grad_x_s    when sel_i = 2 else
