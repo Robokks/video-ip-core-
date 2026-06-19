@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PAL Video IP — Interactive Timing Explorer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#080c10;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden;user-select:none}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#0d1117}::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+
+/* ── TOP NAV ── */
+#nav{display:flex;align-items:center;gap:0;background:#0d1117;border-bottom:1px solid #21262d;padding:0 16px;height:48px}
+#nav h1{font-size:15px;color:#58a6ff;letter-spacing:.5px;margin-right:24px;white-space:nowrap}
+.ntab{padding:0 16px;height:48px;display:flex;align-items:center;cursor:pointer;color:#8b949e;font-size:13px;border-bottom:2px solid transparent;transition:all .15s}
+.ntab:hover{color:#e2e8f0}.ntab.on{color:#58a6ff;border-bottom-color:#58a6ff}
+
+/* ── PAGES ── */
+.pg{display:none;height:calc(100vh - 48px);overflow:hidden}.pg.on{display:flex;flex-direction:column}
+
+/* ── FRAME EXPLORER ── */
+#fe{flex-direction:row!important}
+#fe-left{width:220px;min-width:220px;background:#0d1117;border-right:1px solid #21262d;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+#fe-mid{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#fe-right{width:240px;min-width:240px;background:#0d1117;border-left:1px solid #21262d;padding:14px;overflow-y:auto}
+
+.panel{background:#0d1117;border:1px solid #21262d;border-radius:8px;padding:12px}
+.panel h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#8b949e;margin-bottom:10px}
+.kv{display:flex;justify-content:space-between;margin:5px 0;font-size:12px}
+.kv span:first-child{color:#8b949e}.kv span:last-child{color:#e2e8f0;font-weight:600;font-family:monospace}
+.sig-row{display:flex;align-items:center;gap:8px;margin:5px 0}
+.sig-dot{width:10px;height:10px;border-radius:50%}
+.sig-name{font-size:12px;color:#8b949e;flex:1}
+.sig-val{font-size:13px;font-weight:700;font-family:monospace;min-width:28px;text-align:right}
+.led{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+
+/* ── CONTROLS ── */
+.ctrl-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0d1117;border-bottom:1px solid #21262d;flex-wrap:wrap}
+.btn{padding:5px 12px;border-radius:5px;border:1px solid #30363d;background:#161b22;color:#e2e8f0;cursor:pointer;font-size:12px;transition:all .15s}
+.btn:hover{background:#21262d;border-color:#8b949e}.btn.active{background:#1f3a5f;border-color:#58a6ff;color:#58a6ff}
+.btn.green{background:#1a3a1a;border-color:#3fb950;color:#3fb950}
+.speed-btn{padding:4px 8px;border-radius:4px;border:1px solid #30363d;background:#161b22;color:#8b949e;cursor:pointer;font-size:11px}
+.speed-btn.on{background:#1f3a5f;border-color:#58a6ff;color:#58a6ff}
+label.lbl{font-size:11px;color:#8b949e}
+input[type=range]{accent-color:#58a6ff;width:100px}
+.val-pill{background:#1f3a5f;color:#58a6ff;border-radius:4px;padding:2px 7px;font-size:11px;font-family:monospace;font-weight:700}
+
+/* ── CANVAS WRAPPER ── */
+#frame-wrap{flex:1;position:relative;overflow:hidden;background:#050810}
+#frameC{display:block;cursor:crosshair}
+#overlay-info{position:absolute;top:8px;right:8px;background:#0d111799;border:1px solid #21262d;border-radius:6px;padding:8px 12px;font-size:11px;pointer-events:none;color:#8b949e}
+
+/* ── OSCILLOSCOPE PAGE ── */
+#osc{flex-direction:column}
+#osc-top{display:flex;gap:0;flex:1;overflow:hidden}
+#osc-main{flex:1;display:flex;flex-direction:column;overflow:hidden;padding:16px}
+#osc-side{width:220px;background:#0d1117;border-left:1px solid #21262d;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+#oscC{display:block;border-radius:8px;border:2px solid #1a2a1a;background:#000}
+.osc-ctrl{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.knob-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.knob{display:flex;flex-direction:column;align-items:center;gap:4px}
+.knob label{font-size:10px;color:#8b949e;text-align:center}
+.knob select,.knob input[type=range]{width:80px;font-size:11px}
+select{background:#161b22;border:1px solid #30363d;color:#e2e8f0;border-radius:4px;padding:3px 6px;font-size:11px}
+.trigger-ind{display:flex;align-items:center;gap:6px;font-size:11px}
+.trig-led{width:8px;height:8px;border-radius:50%;background:#3fb950;box-shadow:0 0 6px #3fb950}
+
+/* ── SIGNAL BUILDER PAGE ── */
+#sb{flex-direction:row}
+#sb-left{width:260px;background:#0d1117;border-right:1px solid #21262d;padding:14px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+#sb-main{flex:1;display:flex;flex-direction:column;padding:16px;gap:14px;overflow-y:auto}
+#sbC{display:block;border-radius:6px}
+.switch-row{display:flex;align-items:center;justify-content:space-between;margin:5px 0}
+.switch-row span{font-size:12px;color:#8b949e}
+.sw{position:relative;width:36px;height:20px;cursor:pointer}
+.sw input{opacity:0;width:0;height:0}
+.sw-slider{position:absolute;inset:0;background:#21262d;border-radius:10px;transition:.2s}
+.sw-slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#8b949e;border-radius:50%;transition:.2s}
+.sw input:checked+.sw-slider{background:#1f6feb}
+.sw input:checked+.sw-slider::before{transform:translateX(16px);background:#58a6ff}
+.color-dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:6px}
+
+/* ── VSYNC ZOOM PAGE ── */
+#vz{flex-direction:column}
+#vzC{display:block}
+#vz-main{flex:1;display:flex;flex-direction:column;padding:16px;gap:10px;overflow:hidden}
+
+/* ── COMMON ── */
+.sep{border:none;border-top:1px solid #21262d;margin:8px 0}
+.badge{display:inline-block;padding:2px 7px;border-radius:10px;font-size:11px;font-weight:600}
+.badge.f1{background:#1a3a1a;color:#3fb950}.badge.f2{background:#1a2a3a;color:#58a6ff}
+.badge.eq{background:#3a1a1a;color:#f78166}.badge.brd{background:#3a2a1a;color:#d29922}
+.badge.pq{background:#2a1a3a;color:#bc8cff}.badge.vb{background:#1a1a1a;color:#555}
+.badge.hs{background:#1e1e2e;color:#444}
+.tooltip{position:fixed;background:#161b22;border:1px solid #58a6ff44;border-radius:6px;padding:8px 12px;font-size:11px;pointer-events:none;z-index:999;display:none;max-width:220px;line-height:1.8}
+</style>
+</head>
+<body>
+
+<div id="nav">
+  <h1>📺 PAL Video IP Core</h1>
+  <div class="ntab on" onclick="nav('fe',this)">Frame Explorer</div>
+  <div class="ntab" onclick="nav('osc',this)">Oscilloscope</div>
+  <div class="ntab" onclick="nav('sb',this)">Signal Builder</div>
+  <div class="ntab" onclick="nav('vz',this)">V-Sync Zoom</div>
+</div>
+
+<!-- ═══════════════════ FRAME EXPLORER ═══════════════════ -->
+<div id="pg-fe" class="pg on" style="flex-direction:row">
+
+  <div id="fe-left">
+    <div class="panel">
+      <h3>Cursor Position</h3>
+      <div class="kv"><span>v_cnt</span><span id="inf-v">—</span></div>
+      <div class="kv"><span>h_cnt</span><span id="inf-h">—</span></div>
+      <div class="kv"><span>Scope line</span><span id="inf-sc">—</span></div>
+      <div class="kv"><span>Field</span><span id="inf-f">—</span></div>
+      <div class="kv"><span>hp (in ½-line)</span><span id="inf-hp">—</span></div>
+    </div>
+    <div class="panel">
+      <h3>Signals @ cursor</h3>
+      <div class="sig-row"><div class="sig-dot" style="background:#f78166"></div><div class="sig-name">csync</div><div class="sig-val" id="sv-csync" style="color:#f78166">—</div></div>
+      <div class="sig-row"><div class="sig-dot" style="background:#3fb950"></div><div class="sig-name">active</div><div class="sig-val" id="sv-active" style="color:#3fb950">—</div></div>
+      <div class="sig-row"><div class="sig-dot" style="background:#bc8cff"></div><div class="sig-name">FSS</div><div class="sig-val" id="sv-fss" style="color:#bc8cff">—</div></div>
+      <div class="sig-row"><div class="sig-dot" style="background:#d29922"></div><div class="sig-name">frame_sync</div><div class="sig-val" id="sv-fsync" style="color:#d29922">—</div></div>
+      <div class="sig-row"><div class="sig-dot" style="background:#58a6ff"></div><div class="sig-name">blank</div><div class="sig-val" id="sv-blank" style="color:#58a6ff">—</div></div>
+      <hr class="sep">
+      <div class="kv"><span>DAC level</span><span id="sv-dac">—</span></div>
+      <div class="kv"><span>Region</span><span id="sv-region">—</span></div>
+    </div>
+    <div class="panel">
+      <h3>Legend</h3>
+      <div style="font-size:11px;line-height:2">
+        <span class="badge f1">Active F1</span><br>
+        <span class="badge f2">Active F2</span><br>
+        <span class="badge eq">Pre-Equalising</span><br>
+        <span class="badge brd">Broad Sync / FSS</span><br>
+        <span class="badge pq">Post-Eq / FSS</span><br>
+        <span class="badge vb">V-Blank</span><br>
+        <span class="badge hs">H-Sync lines</span><br>
+        <span style="color:#555;font-size:10px">Bright bands = csync LOW</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Key Constants</h3>
+      <div class="kv"><span>H_TOTAL</span><span>640</span></div>
+      <div class="kv"><span>V_TOTAL</span><span>625</span></div>
+      <div class="kv"><span>H_FRONT</span><span>16</span></div>
+      <div class="kv"><span>H_SYNC_W</span><span>47</span></div>
+      <div class="kv"><span>H_BACK</span><span>57</span></div>
+      <div class="kv"><span>H_ACTIVE</span><span>520</span></div>
+      <div class="kv"><span>HALF</span><span>320</span></div>
+      <div class="kv"><span>EQ_W</span><span>23</span></div>
+      <div class="kv"><span>BROAD_W</span><span>273</span></div>
+      <div class="kv"><span>V_ACT_S_F1</span><span>25</span></div>
+      <div class="kv"><span>V_ACT_E_F1</span><span>311</span></div>
+      <div class="kv"><span>V_ACT_S_F2</span><span>337</span></div>
+      <div class="kv"><span>V_ACT_E_F2</span><span>623</span></div>
+    </div>
+  </div>
+
+  <div id="fe-mid">
+    <div class="ctrl-row">
+      <button class="btn active" id="animBtn" onclick="toggleAnim()">⏵ Animate Scan</button>
+      <label class="lbl">Speed:</label>
+      <button class="speed-btn" onclick="setSpeed(1)">1×</button>
+      <button class="speed-btn on" onclick="setSpeed(4)">4×</button>
+      <button class="speed-btn" onclick="setSpeed(16)">16×</button>
+      <button class="speed-btn" onclick="setSpeed(64)">64×</button>
+      <div style="flex:1"></div>
+      <label class="lbl">Zoom:</label>
+      <button class="btn" onclick="setZoom(1)">1×</button>
+      <button class="btn" onclick="setZoom(2)">2×</button>
+      <button class="btn" onclick="setZoom(0.5)">½×</button>
+      <span id="overlay-info">Hover or click frame to inspect</span>
+    </div>
+    <div id="frame-wrap">
+      <canvas id="frameC"></canvas>
+    </div>
+  </div>
+
+  <div id="fe-right">
+    <div class="panel">
+      <h3>Scan Position</h3>
+      <div class="kv"><span>v_cnt</span><span id="scan-v">0</span></div>
+      <div class="kv"><span>h_cnt</span><span id="scan-h">0</span></div>
+      <div class="kv"><span>Line %</span><span id="scan-hp">0%</span></div>
+      <div class="kv"><span>Frame %</span><span id="scan-fp">0%</span></div>
+      <hr class="sep">
+      <div class="kv"><span>csync</span><span id="scan-csync" style="color:#f78166">0</span></div>
+      <div class="kv"><span>active</span><span id="scan-active" style="color:#3fb950">0</span></div>
+      <div class="kv"><span>FSS</span><span id="scan-fss" style="color:#bc8cff">0</span></div>
+    </div>
+    <div class="panel" style="margin-top:10px">
+      <h3>H Waveform (current line)</h3>
+      <canvas id="hMini" width="200" height="80"></canvas>
+    </div>
+    <div class="panel" style="margin-top:10px">
+      <h3>V Position Indicator</h3>
+      <canvas id="vMini" width="200" height="260"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ OSCILLOSCOPE ═══════════════════ -->
+<div id="pg-osc" class="pg">
+  <div id="osc-top">
+    <div id="osc-main">
+      <div class="osc-ctrl">
+        <div class="trigger-ind"><div class="trig-led" id="trigLed"></div><span style="font-size:11px;color:#3fb950">TRIG'D</span></div>
+        <div class="knob-row">
+          <div class="knob"><label>Signal</label>
+            <select id="oscSig" onchange="drawOsc()">
+              <option value="csync">csync</option>
+              <option value="active">active</option>
+              <option value="fss">FSS</option>
+              <option value="frame_sync">frame_sync (F1)</option>
+              <option value="blank">blank</option>
+            </select>
+          </div>
+          <div class="knob"><label>Time/div</label>
+            <select id="oscDiv" onchange="drawOsc()">
+              <option value="64">1 line (64µs)</option>
+              <option value="320">5 lines</option>
+              <option value="640" selected>10 lines</option>
+              <option value="3200">50 lines</option>
+              <option value="6400">100 lines</option>
+              <option value="40000">Full frame</option>
+            </select>
+          </div>
+          <div class="knob"><label>Trigger line</label>
+            <input type="range" id="oscTrigV" min="0" max="624" value="0" oninput="drawOsc()">
+          </div>
+          <div class="knob"><label>v_cnt=<span id="trigVval">0</span></label><br>
+            <input type="range" id="oscOffH" min="0" max="639" value="0" oninput="drawOsc()">
+          </div>
+          <div class="knob"><label>h offset=<span id="oscHval">0</span></label></div>
+        </div>
+      </div>
+      <canvas id="oscC"></canvas>
+    </div>
+    <div id="osc-side">
+      <div class="panel">
+        <h3>Measurements</h3>
+        <div class="kv"><span>Period</span><span id="m-period">—</span></div>
+        <div class="kv"><span>Freq</span><span id="m-freq">—</span></div>
+        <div class="kv"><span>Pulse width</span><span id="m-pw">—</span></div>
+        <div class="kv"><span>Duty cycle</span><span id="m-duty">—</span></div>
+        <div class="kv"><span>V high</span><span id="m-vhi">1</span></div>
+        <div class="kv"><span>V low</span><span id="m-vlo">0</span></div>
+      </div>
+      <div class="panel">
+        <h3>Cursor A</h3>
+        <div class="kv"><span>Position</span><span id="cA-pos">—</span></div>
+        <div class="kv"><span>Value</span><span id="cA-val">—</span></div>
+      </div>
+      <div class="panel">
+        <h3>Cursor B</h3>
+        <div class="kv"><span>Position</span><span id="cB-pos">—</span></div>
+        <div class="kv"><span>Value</span><span id="cB-val">—</span></div>
+        <div class="kv"><span>ΔT</span><span id="cAB-dt">—</span></div>
+      </div>
+      <div class="panel">
+        <h3>Signal Info</h3>
+        <div id="osc-siginfo" style="font-size:11px;color:#8b949e;line-height:1.8"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SIGNAL BUILDER ═══════════════════ -->
+<div id="pg-sb" class="pg">
+  <div id="sb-left">
+    <div class="panel">
+      <h3>Visible Signals</h3>
+      <div class="switch-row"><span><span class="color-dot" style="background:#f78166"></span>csync</span><label class="sw"><input type="checkbox" id="sw-csync" checked onchange="drawSB()"><span class="sw-slider"></span></label></div>
+      <div class="switch-row"><span><span class="color-dot" style="background:#3fb950"></span>active</span><label class="sw"><input type="checkbox" id="sw-active" checked onchange="drawSB()"><span class="sw-slider"></span></label></div>
+      <div class="switch-row"><span><span class="color-dot" style="background:#bc8cff"></span>FSS</span><label class="sw"><input type="checkbox" id="sw-fss" checked onchange="drawSB()"><span class="sw-slider"></span></label></div>
+      <div class="switch-row"><span><span class="color-dot" style="background:#d29922"></span>frame_sync</span><label class="sw"><input type="checkbox" id="sw-fsync" checked onchange="drawSB()"><span class="sw-slider"></span></label></div>
+      <div class="switch-row"><span><span class="color-dot" style="background:#58a6ff"></span>blank</span><label class="sw"><input type="checkbox" id="sw-blank" onchange="drawSB()"><span class="sw-slider"></span></label></div>
+    </div>
+    <div class="panel">
+      <h3>View Window</h3>
+      <div class="kv"><span>Start line</span><span class="val-pill" id="sb-startv">0</span></div>
+      <input type="range" id="sb-vstart" min="0" max="615" value="0" oninput="drawSB()" style="width:100%;accent-color:#58a6ff">
+      <div class="kv" style="margin-top:10px"><span>Lines shown</span><span class="val-pill" id="sb-nlines">20</span></div>
+      <input type="range" id="sb-nlines-r" min="2" max="100" value="20" oninput="drawSB()" style="width:100%;accent-color:#58a6ff">
+      <div class="kv" style="margin-top:10px"><span>h_cnt start</span><span class="val-pill" id="sb-starth">0</span></div>
+      <input type="range" id="sb-hstart" min="0" max="600" value="0" oninput="drawSB()" style="width:100%;accent-color:#58a6ff">
+    </div>
+    <div class="panel">
+      <h3>Quick Jump</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">
+        <button class="btn" onclick="sbJump(0)">F1 Start</button>
+        <button class="btn" onclick="sbJump(3)">F1 FSS</button>
+        <button class="btn" onclick="sbJump(23)">F1 Video</button>
+        <button class="btn" onclick="sbJump(308)">F1 End</button>
+        <button class="btn" onclick="sbJump(310)">F1→F2</button>
+        <button class="btn" onclick="sbJump(312)">F2 Start</button>
+        <button class="btn" onclick="sbJump(315)">F2 FSS</button>
+        <button class="btn" onclick="sbJump(335)">F2 Video</button>
+        <button class="btn" onclick="sbJump(619)">F2 End</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Cursor</h3>
+      <div class="kv"><span>v_cnt</span><span id="sb-cv">—</span></div>
+      <div class="kv"><span>h_cnt</span><span id="sb-ch">—</span></div>
+      <div class="kv"><span>csync</span><span id="sb-ccsync">—</span></div>
+      <div class="kv"><span>active</span><span id="sb-cactive">—</span></div>
+      <div class="kv"><span>FSS</span><span id="sb-cfss">—</span></div>
+    </div>
+  </div>
+  <div id="sb-main">
+    <canvas id="sbC"></canvas>
+    <div id="sb-info" style="font-size:11px;color:#8b949e;margin-top:6px;padding:0 4px">Click on waveform to inspect. Drag to pan.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ VSYNC ZOOM ═══════════════════ -->
+<div id="pg-vz" class="pg">
+  <div id="vz-main">
+    <div class="ctrl-row" style="border:none;padding:0 0 10px">
+      <button class="btn active" onclick="vzField(1,this)">Field 1 (v 0–8)</button>
+      <button class="btn" onclick="vzField(2,this)">Field 2 (v 312–320)</button>
+      <div style="flex:1"></div>
+      <label class="lbl">Half-line resolution:</label>
+      <button class="btn active" onclick="vzRes('half',this)">Half-line</button>
+      <button class="btn" onclick="vzRes('full',this)">Full-line</button>
+    </div>
+    <canvas id="vzC" style="display:block;border-radius:6px"></canvas>
+    <div id="vz-info" style="margin-top:12px;font-size:12px;color:#8b949e;line-height:1.8"></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ════════════════════════════════ VHDL CONSTANTS
+const H_FRONT=16,H_SYNC_W=47,H_BACK=57,H_ACTIVE=520,H_TOTAL=640;
+const H_ACT_S=H_FRONT+H_SYNC_W+H_BACK; // 120
+const HALF=320,EQ_W=23,BROAD_W=273,V_TOTAL=625;
+const V_ACT_S_F1=25,V_ACT_E_F1=311,V_ACT_S_F2=337,V_ACT_E_F2=623;
+const PIXEL_NS=100; // 10 MHz → 100 ns per pixel
+
+// ════════════════════════════════ SIGNAL COMPUTATION
+function sig(v,h){
+  const fh=h<HALF, hp=fh?h:h-HALF;
+  const f1p=(v===0)||(v===1)||(v===2&&fh);
+  const f1b=(v===2&&!fh)||(v===3)||(v===4);
+  const f1q=(v===5)||(v===6)||(v===7&&fh);
+  const f2p=(v===312&&!fh)||(v===313)||(v===314);
+  const f2b=(v===315)||(v===316)||(v===317&&fh);
+  const f2q=(v===317&&!fh)||(v===318)||(v===319);
+  const in_eq=f1p||f1q||f2p||f2q, in_brd=f1b||f2b;
+  const in_vs=(v<=7)||(v>=312&&v<=319);
+  let csync=0;
+  if(in_eq&&hp<EQ_W)csync=1;
+  else if(in_brd&&hp<BROAD_W)csync=1;
+  else if(!in_eq&&!in_brd&&h>=H_FRONT&&h<H_FRONT+H_SYNC_W)csync=1;
+  const active=((v>=V_ACT_S_F1&&v<=V_ACT_E_F1)||(v>=V_ACT_S_F2&&v<=V_ACT_E_F2))&&h>=H_ACT_S;
+  const field=(v>312)||(v===312&&!fh)?2:1;
+  const fss=(v>=3&&v<=7)||(v===315&&h>=320)||(v>=316&&v<=319)||(v===320&&h<320);
+  const frame_sync=(v<=7)?1:0;
+  const blank=active?0:1;
+  let rgn='vblank';
+  if(f1p||f2p)rgn='pre_eq';
+  else if(f1b||f2b)rgn='broad';
+  else if(f1q||f2q)rgn='post_eq';
+  else if(active)rgn=field===1?'active_f1':'active_f2';
+  else if(!in_vs&&csync)rgn='hsync_line';
+  const dac=csync?0:active?15:4;
+  return{csync,active,field,fss,frame_sync,blank,in_eq,in_brd,in_vs,rgn,hp,fh,dac};
+}
+
+const RC={active_f1:'#1a3a1a',active_f2:'#1a2a3a',pre_eq:'#3a1a1a',broad:'#3a2a1a',post_eq:'#2a1a3a',vblank:'#0e1015',hsync_line:'#141420'};
+const RN={active_f1:'Active F1',active_f2:'Active F2',pre_eq:'Pre-Equalising',broad:'Broad Sync',post_eq:'Post-Eq (FSS)',vblank:'V-Blank',hsync_line:'H-Sync line'};
+
+function hexRGB(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)}}
+
+// ════════════════════════════════ FRAME EXPLORER
+const frameC=document.getElementById('frameC');
+const fCtx=frameC.getContext('2d');
+let animOn=false,animPos=0,animSpeed=4,animRAF=null,fZoom=1;
+let frameImg=null;
+
+function buildFrameImg(){
+  const W=frameC.width,H=frameC.height;
+  const img=fCtx.createImageData(W,H);
+  const d=img.data;
+  for(let py=0;py<H;py++){
+    const v=Math.floor(py*V_TOTAL/H);
+    for(let px=0;px<W;px++){
+      const h=Math.floor(px*H_TOTAL/W);
+      const s=sig(v,h);
+      const c=hexRGB(RC[s.rgn]||'#0e1015');
+      let r=c.r,g=c.g,b=c.b;
+      if(s.csync){r=Math.min(255,r+55);g=Math.min(255,g+55);b=Math.min(255,b+55);}
+      const i=(py*W+px)*4;d[i]=r;d[i+1]=g;d[i+2]=b;d[i+3]=255;
+    }
+  }
+  return img;
+}
+
+function resizeFrame(){
+  const wrap=document.getElementById('frame-wrap');
+  frameC.width=wrap.clientWidth;
+  frameC.height=wrap.clientHeight;
+  frameImg=buildFrameImg();
+  renderFrame();
+}
+
+function renderFrame(){
+  if(!frameImg)return;
+  fCtx.putImageData(frameImg,0,0);
+  const W=frameC.width,H=frameC.height;
+  // Field divider
+  const y312=312*H/V_TOTAL;
+  fCtx.setLineDash([5,4]);fCtx.strokeStyle='#58a6ff55';fCtx.lineWidth=1;
+  fCtx.beginPath();fCtx.moveTo(0,y312);fCtx.lineTo(W,y312);fCtx.stroke();fCtx.setLineDash([]);
+  // Field labels
+  fCtx.font='bold 14px sans-serif';
+  fCtx.fillStyle='#3fb95044';fCtx.fillText('FIELD 1 (v_cnt 0–311 → scope lines 1–312)',12,y312/2+7);
+  fCtx.fillStyle='#58a6ff44';fCtx.fillText('FIELD 2 (v_cnt 312–624 → scope lines 313–625)',12,y312+(H-y312)/2+7);
+  // Scan line
+  if(animOn){
+    const sv=Math.floor(animPos/H_TOTAL);
+    const sh=animPos%H_TOTAL;
+    const py=sv*H/V_TOTAL;
+    const px=sh*W/H_TOTAL;
+    fCtx.strokeStyle='#ffffff66';fCtx.lineWidth=2;fCtx.setLineDash([]);
+    fCtx.beginPath();fCtx.moveTo(0,py);fCtx.lineTo(W,py);fCtx.stroke();
+    fCtx.fillStyle='#fff';fCtx.beginPath();fCtx.arc(px,py,4,0,Math.PI*2);fCtx.fill();
+    const s=sig(sv,sh);
+    document.getElementById('scan-v').textContent=sv;
+    document.getElementById('scan-h').textContent=sh;
+    document.getElementById('scan-hp').textContent=((sh/H_TOTAL)*100).toFixed(1)+'%';
+    document.getElementById('scan-fp').textContent=((animPos/(H_TOTAL*V_TOTAL))*100).toFixed(2)+'%';
+    document.getElementById('scan-csync').textContent=s.csync;
+    document.getElementById('scan-active').textContent=s.active?1:0;
+    document.getElementById('scan-fss').textContent=s.fss?1:0;
+    drawHMini(sv);drawVMini(sv);
+  }
+}
+
+function animStep(){
+  if(!animOn)return;
+  animPos=(animPos+animSpeed)%(H_TOTAL*V_TOTAL);
+  renderFrame();
+  animRAF=requestAnimationFrame(animStep);
+}
+
+function toggleAnim(){
+  animOn=!animOn;
+  const btn=document.getElementById('animBtn');
+  btn.textContent=animOn?'⏸ Pause':'⏵ Animate Scan';
+  btn.classList.toggle('active',animOn);
+  if(animOn)animStep();
+  else cancelAnimationFrame(animRAF);
+}
+
+function setSpeed(s){
+  animSpeed=s;
+  document.querySelectorAll('.speed-btn').forEach(b=>{b.classList.toggle('on',b.textContent===s+'×')});
+}
+
+function setZoom(z){fZoom=z;resizeFrame();}
+
+// Frame hover
+frameC.addEventListener('mousemove',e=>{
+  const r=frameC.getBoundingClientRect();
+  const px=(e.clientX-r.left),py=(e.clientY-r.top);
+  const v=Math.floor(py*V_TOTAL/frameC.height),h=Math.floor(px*H_TOTAL/frameC.width);
+  if(v<0||v>=V_TOTAL||h<0||h>=H_TOTAL)return;
+  const s=sig(v,h);
+  const sc=v<312?v+1:v;
+  document.getElementById('inf-v').textContent=v;
+  document.getElementById('inf-h').textContent=h;
+  document.getElementById('inf-sc').textContent=sc;
+  document.getElementById('inf-f').textContent=s.field;
+  document.getElementById('inf-hp').textContent=s.hp;
+  document.getElementById('sv-csync').textContent=s.csync;
+  document.getElementById('sv-active').textContent=s.active?1:0;
+  document.getElementById('sv-fss').textContent=s.fss?1:0;
+  document.getElementById('sv-fsync').textContent=s.frame_sync;
+  document.getElementById('sv-blank').textContent=s.blank;
+  document.getElementById('sv-dac').textContent='0x'+s.dac.toString(16).toUpperCase()+' ('+s.dac+'/15)';
+  document.getElementById('sv-region').textContent=RN[s.rgn]||s.rgn;
+  if(!animOn){drawHMini(v);drawVMini(v);}
+});
+
+// H Mini waveform
+function drawHMini(v){
+  const c=document.getElementById('hMini');
+  const ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  ctx.fillStyle='#080c10';ctx.fillRect(0,0,W,H);
+  const PX=W/H_TOTAL;
+  // background regions
+  for(let h=0;h<H_TOTAL;h++){
+    const s=sig(v,h);
+    ctx.fillStyle=RC[s.rgn]||'#0e1015';
+    ctx.fillRect(h*PX,0,PX+.5,H);
+  }
+  // csync waveform
+  ctx.beginPath();ctx.strokeStyle='#f78166';ctx.lineWidth=1.5;
+  let pm=null;
+  for(let h=0;h<=H_TOTAL;h++){
+    const s=sig(v,Math.min(h,H_TOTAL-1));
+    const x=h*PX,y=s.csync?4:H-4;
+    if(!pm){ctx.moveTo(x,y);}else if(pm!==s.csync){ctx.lineTo(x,pm?4:H-4);ctx.lineTo(x,y);}else{ctx.lineTo(x,y);}
+    pm=s.csync;
+  }
+  ctx.stroke();
+  // active
+  ctx.beginPath();ctx.strokeStyle='#3fb950';ctx.lineWidth=1.5;
+  pm=null;
+  for(let h=0;h<=H_TOTAL;h++){
+    const s=sig(v,Math.min(h,H_TOTAL-1));
+    const x=h*PX,y=s.active?H/2+4:H-4;
+    if(!pm){ctx.moveTo(x,y);}else if(pm!==!!s.active){ctx.lineTo(x,pm?H/2+4:H-4);ctx.lineTo(x,y);}else{ctx.lineTo(x,y);}
+    pm=!!s.active;
+  }
+  ctx.stroke();
+}
+
+// V Mini position bar
+function drawVMini(v){
+  const c=document.getElementById('vMini');
+  const ctx=c.getContext('2d');
+  const W=c.width,H=c.height;
+  ctx.fillStyle='#080c10';ctx.fillRect(0,0,W,H);
+  // draw each line as a colored row
+  for(let vi=0;vi<V_TOTAL;vi++){
+    const s=sig(vi,H_ACT_S+1);
+    const y=vi*H/V_TOTAL;
+    const h2=Math.max(1,H/V_TOTAL);
+    ctx.fillStyle=RC[s.rgn]||'#0e1015';
+    ctx.fillRect(0,y,W,h2);
+  }
+  // current position indicator
+  const py=v*H/V_TOTAL;
+  ctx.fillStyle='#fff';
+  ctx.fillRect(0,py,W,Math.max(2,H/V_TOTAL));
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.fillRect(0,0,W,py);
+}
+
+// ════════════════════════════════ OSCILLOSCOPE
+const oscC=document.getElementById('oscC');
+const oCtx=oscC.getContext('2d');
+let oscCurA=null,oscCurB=null,oscDragging=null;
+
+function resizeOsc(){
+  const m=document.getElementById('osc-main');
+  oscC.width=m.clientWidth-32;
+  oscC.height=Math.floor((window.innerHeight-48-80)*0.85);
+  drawOsc();
+}
+
+function getSigVal(s,key){
+  if(key==='csync')return s.csync;
+  if(key==='active')return s.active?1:0;
+  if(key==='fss')return s.fss?1:0;
+  if(key==='frame_sync')return s.frame_sync;
+  if(key==='blank')return s.blank;
+  return 0;
+}
+
+function drawOsc(){
+  const W=oscC.width,H=oscC.height;
+  const key=document.getElementById('oscSig').value;
+  const divN=parseInt(document.getElementById('oscDiv').value);
+  const trigV=parseInt(document.getElementById('oscTrigV').value);
+  const offH=parseInt(document.getElementById('oscOffH').value);
+  document.getElementById('trigVval').textContent=trigV;
+  document.getElementById('oscHval').textContent=offH;
+
+  // Draw CRT grid
+  oCtx.fillStyle='#000e00';oCtx.fillRect(0,0,W,H);
+  oCtx.strokeStyle='#0a1f0a';oCtx.lineWidth=1;
+  const DIVS=10,HDIVS=8;
+  for(let i=0;i<=DIVS;i++){const x=i*W/DIVS;oCtx.beginPath();oCtx.moveTo(x,0);oCtx.lineTo(x,H);oCtx.stroke();}
+  for(let i=0;i<=HDIVS;i++){const y=i*H/HDIVS;oCtx.beginPath();oCtx.moveTo(0,y);oCtx.lineTo(W,y);oCtx.stroke();}
+  // Brighter center lines
+  oCtx.strokeStyle='#0f2f0f';
+  oCtx.beginPath();oCtx.moveTo(W/2,0);oCtx.lineTo(W/2,H);oCtx.stroke();
+  oCtx.beginPath();oCtx.moveTo(0,H/2);oCtx.lineTo(W,H/2);oCtx.stroke();
+
+  // Total samples = divN lines * H_TOTAL pixels per line
+  const totalPx=divN*H_TOTAL;
+  let vals=[];
+  let startTot=trigV*H_TOTAL+offH;
+  for(let i=0;i<totalPx;i++){
+    const tot=(startTot+i)%(H_TOTAL*V_TOTAL);
+    const v=Math.floor(tot/H_TOTAL),h=tot%H_TOTAL;
+    const s=sig(v,h);
+    vals.push(getSigVal(s,key));
+  }
+
+  // Phosphor glow: draw 3 passes
+  const SIG_COLORS=['#00ff0022','#00ff0066','#39ff14'];
+  SIG_COLORS.forEach((col,pass)=>{
+    oCtx.beginPath();
+    oCtx.strokeStyle=col;
+    oCtx.lineWidth=pass===2?1.5:pass===1?3:5;
+    let pm=null;
+    const PX=W/totalPx;
+    for(let i=0;i<=totalPx;i++){
+      const val=vals[Math.min(i,totalPx-1)];
+      const x=i*PX;
+      const y=val?H*0.15:H*0.85;
+      if(i===0){oCtx.moveTo(x,y);}
+      else if(pm!==val){oCtx.lineTo(x,pm?H*0.15:H*0.85);oCtx.lineTo(x,y);}
+      else{oCtx.lineTo(x,y);}
+      pm=val;
+    }
+    oCtx.stroke();
+  });
+
+  // Trigger level line
+  oCtx.strokeStyle='#ffff0066';oCtx.lineWidth=1;oCtx.setLineDash([6,4]);
+  oCtx.beginPath();oCtx.moveTo(0,H*0.15);oCtx.lineTo(W,H*0.15);oCtx.stroke();
+  oCtx.setLineDash([]);
+
+  // Cursors
+  [oscCurA,oscCurB].forEach((cx,ci)=>{
+    if(cx===null)return;
+    const col=ci===0?'#ffcc00':'#ff6688';
+    oCtx.strokeStyle=col;oCtx.lineWidth=1;oCtx.setLineDash([4,3]);
+    oCtx.beginPath();oCtx.moveTo(cx,0);oCtx.lineTo(cx,H);oCtx.stroke();oCtx.setLineDash([]);
+    oCtx.fillStyle=col;oCtx.font='11px monospace';
+    const idx=Math.floor(cx*totalPx/W);
+    const tot=(startTot+idx)%(H_TOTAL*V_TOTAL);
+    const vv=Math.floor(tot/H_TOTAL),hh=tot%H_TOTAL;
+    oCtx.fillText(`${ci===0?'A':'B'}: v=${vv} h=${hh}`,cx+4,ci===0?16:32);
+    document.getElementById(`c${ci===0?'A':'B'}-pos`).textContent=`v=${vv} h=${hh}`;
+    document.getElementById(`c${ci===0?'A':'B'}-val`).textContent=vals[Math.min(idx,totalPx-1)];
+  });
+  if(oscCurA!==null&&oscCurB!==null){
+    const idxA=Math.floor(oscCurA*totalPx/W);
+    const idxB=Math.floor(oscCurB*totalPx/W);
+    const dtPx=Math.abs(idxB-idxA);
+    const dtNs=dtPx*PIXEL_NS;
+    document.getElementById('cAB-dt').textContent=dtNs>=1000?(dtNs/1000).toFixed(2)+'µs':dtNs+'ns';
+  }
+
+  // Measurements
+  let edges=[],last=vals[0];
+  for(let i=1;i<vals.length;i++){
+    if(vals[i]!==last){edges.push({i,rise:vals[i]>last});last=vals[i];}
+  }
+  const rises=edges.filter(e=>e.rise);
+  if(rises.length>=2){
+    const period=(rises[1].i-rises[0].i)*PIXEL_NS;
+    const freq=period>0?(1e9/period):0;
+    document.getElementById('m-period').textContent=period>=1000?(period/1000).toFixed(2)+'µs':period+'ns';
+    document.getElementById('m-freq').textContent=freq>=1e6?(freq/1e6).toFixed(3)+'MHz':freq>=1000?(freq/1000).toFixed(2)+'kHz':freq.toFixed(0)+'Hz';
+  }
+  const pw=vals.reduce((a,v)=>a+(v?1:0),0)*PIXEL_NS;
+  const duty=vals.length>0?(vals.reduce((a,v)=>a+(v?1:0),0)/vals.length*100):0;
+  document.getElementById('m-pw').textContent=pw>=1000?(pw/1000).toFixed(2)+'µs':pw+'ns';
+  document.getElementById('m-duty').textContent=duty.toFixed(1)+'%';
+
+  // Signal info blurb
+  const infos={
+    csync:'Composite sync — LOW (0) during sync tip. H-sync: 4.7µs. EQ pulses: 2.3µs. Broad sync: 27.3µs.',
+    active:'HIGH when pixel data is valid (h_cnt≥120, within active V range).',
+    fss:'Field Synchronising Signal — 50 Hz. F1: lines 3–7. F2: starts scope line 314 last half.',
+    frame_sync:'25 Hz. HIGH only during F1 vsync (v_cnt 0–7).',
+    blank:'HIGH during all blanking intervals (H-blank + V-blank).'
+  };
+  document.getElementById('osc-siginfo').textContent=infos[key]||'';
+}
+
+// Oscilloscope click → set cursor A/B
+oscC.addEventListener('click',e=>{
+  const r=oscC.getBoundingClientRect();
+  const x=e.clientX-r.left;
+  if(e.shiftKey){oscCurB=x;}else{oscCurA=x;}
+  drawOsc();
+});
+oscC.addEventListener('contextmenu',e=>{e.preventDefault();oscCurA=null;oscCurB=null;drawOsc();});
+
+// ════════════════════════════════ SIGNAL BUILDER
+const sbC=document.getElementById('sbC');
+const sbCtx=sbC.getContext('2d');
+let sbCursorX=null;
+
+const SB_SIGS=[
+  {id:'csync',color:'#f78166',fn:s=>s.csync},
+  {id:'active',color:'#3fb950',fn:s=>s.active?1:0},
+  {id:'fss',color:'#bc8cff',fn:s=>s.fss?1:0},
+  {id:'fsync',color:'#d29922',fn:s=>s.frame_sync},
+  {id:'blank',color:'#58a6ff',fn:s=>s.blank},
+];
+
+function resizeSB(){
+  const m=document.getElementById('sb-main');
+  sbC.width=m.clientWidth-16;
+  sbC.height=Math.max(300,window.innerHeight-48-80);
+  drawSB();
+}
+
+function drawSB(){
+  const W=sbC.width,H=sbC.height;
+  const startV=parseInt(document.getElementById('sb-vstart').value);
+  const nLines=parseInt(document.getElementById('sb-nlines-r').value);
+  const startH=parseInt(document.getElementById('sb-hstart').value);
+  document.getElementById('sb-startv').textContent=startV;
+  document.getElementById('sb-nlines').textContent=nLines;
+  document.getElementById('sb-starth').textContent=startH;
+  sbCtx.fillStyle='#080c10';sbCtx.fillRect(0,0,W,H);
+
+  const vis=SB_SIGS.filter(sg=>document.getElementById('sw-'+sg.id)?.checked);
+  if(!vis.length)return;
+  const LABEL_W=60;
+  const trackH=Math.floor((H-20)/vis.length);
+  const totalH=nLines*H_TOTAL;
+  const PX=(W-LABEL_W)/totalH;
+
+  vis.forEach((sg,ti)=>{
+    const ty=20+ti*trackH;
+    // Track bg
+    sbCtx.fillStyle='#0a0e14';sbCtx.fillRect(LABEL_W,ty,W-LABEL_W,trackH-2);
+    // Label
+    sbCtx.fillStyle=sg.color;sbCtx.font='bold 11px monospace';
+    sbCtx.fillText(sg.id,4,ty+trackH/2+4);
+    // Line boundaries
+    for(let li=0;li<=nLines;li++){
+      const x=LABEL_W+li*(W-LABEL_W)/nLines;
+      sbCtx.fillStyle='#1a1f2a';sbCtx.fillRect(x,ty,1,trackH-2);
+      if(li<nLines){
+        const v=(startV+li)%V_TOTAL;
+        sbCtx.fillStyle='#30363d';sbCtx.font='9px monospace';
+        sbCtx.fillText(`${v}`,x+2,ty+trackH-4);
+      }
+    }
+    // Waveform
+    sbCtx.beginPath();sbCtx.strokeStyle=sg.color;sbCtx.lineWidth=1.5;
+    const SIG_TOP=ty+6,SIG_BOT=ty+trackH-18,SIG_H=SIG_BOT-SIG_TOP;
+    let pm=null;
+    for(let i=0;i<=totalH;i++){
+      const vi=Math.floor(i/H_TOTAL);
+      const hi=(startH+i%H_TOTAL)%H_TOTAL;
+      const v=(startV+vi)%V_TOTAL;
+      const s=sig(v,hi);
+      const val=sg.fn(s);
+      const x=LABEL_W+i*PX;
+      const y=val?SIG_TOP:SIG_BOT;
+      if(!pm){sbCtx.moveTo(x,y);}
+      else if(pm!==val){sbCtx.lineTo(x,pm?SIG_TOP:SIG_BOT);sbCtx.lineTo(x,y);}
+      else{sbCtx.lineTo(x,y);}
+      pm=val;
+    }
+    sbCtx.stroke();
+    // Glow
+    sbCtx.strokeStyle=sg.color+'33';sbCtx.lineWidth=4;sbCtx.stroke();
+  });
+
+  // Cursor
+  if(sbCursorX!==null){
+    sbCtx.strokeStyle='#ffffff44';sbCtx.lineWidth=1;sbCtx.setLineDash([4,3]);
+    sbCtx.beginPath();sbCtx.moveTo(sbCursorX,20);sbCtx.lineTo(sbCursorX,H);sbCtx.stroke();sbCtx.setLineDash([]);
+  }
+}
+
+sbC.addEventListener('mousemove',e=>{
+  const r=sbC.getBoundingClientRect();
+  const mx=e.clientX-r.left;
+  const LABEL_W=60;
+  const nLines=parseInt(document.getElementById('sb-nlines-r').value);
+  const startV=parseInt(document.getElementById('sb-vstart').value);
+  const startH=parseInt(document.getElementById('sb-hstart').value);
+  if(mx<LABEL_W)return;
+  const frac=(mx-LABEL_W)/(sbC.width-LABEL_W);
+  const totalH=nLines*H_TOTAL;
+  const idx=Math.floor(frac*totalH);
+  const vi=Math.floor(idx/H_TOTAL),hi=(startH+idx%H_TOTAL)%H_TOTAL;
+  const v=(startV+vi)%V_TOTAL;
+  const s=sig(v,hi);
+  sbCursorX=mx;
+  document.getElementById('sb-cv').textContent=v;
+  document.getElementById('sb-ch').textContent=hi;
+  document.getElementById('sb-ccsync').textContent=s.csync;
+  document.getElementById('sb-cactive').textContent=s.active?1:0;
+  document.getElementById('sb-cfss').textContent=s.fss?1:0;
+  drawSB();
+});
+
+function sbJump(v){
+  document.getElementById('sb-vstart').value=Math.max(0,v-2);
+  drawSB();
+}
+
+// ════════════════════════════════ VSYNC ZOOM
+const vzC=document.getElementById('vzC');
+const vzCtx=vzC.getContext('2d');
+let vzFieldN=1,vzResMode='half';
+
+function resizeVZ(){
+  const m=document.getElementById('vz-main');
+  vzC.width=m.clientWidth-16;
+  vzC.height=Math.max(300,window.innerHeight-48-140);
+  drawVZ();
+}
+
+function vzField(n,btn){
+  vzFieldN=n;
+  document.querySelectorAll('#pg-vz .btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  drawVZ();
+}
+function vzRes(r,btn){
+  vzResMode=r;
+  document.querySelectorAll('#pg-vz .btn').forEach(b=>{if(b.textContent==='Half-line'||b.textContent==='Full-line')b.classList.remove('active');});
+  btn.classList.add('active');
+  drawVZ();
+}
+
+function drawVZ(){
+  const W=vzC.width,H=vzC.height;
+  vzCtx.fillStyle='#080c10';vzCtx.fillRect(0,0,W,H);
+  const vRange=vzFieldN===1?{s:0,e:8}:{s:312,e:320};
+  const nV=vRange.e-vRange.s+1;
+  const nCols=vzResMode==='half'?2:1;
+  const LABEL_W=70,TOP=30;
+  const ROW_H=(H-TOP)/nV;
+
+  // Column headers
+  vzCtx.fillStyle='#8b949e';vzCtx.font='11px monospace';
+  if(vzResMode==='half'){
+    vzCtx.fillText('First Half (h=0–319)',LABEL_W+10,20);
+    vzCtx.fillText('Second Half (h=320–639)',LABEL_W+(W-LABEL_W)/2+10,20);
+  }else{
+    vzCtx.fillText('Full Line (h=0–639)',LABEL_W+10,20);
+  }
+
+  for(let vi=vRange.s;vi<=vRange.e;vi++){
+    const row=vi-vRange.s;
+    const y=TOP+row*ROW_H;
+
+    // Row label
+    vzCtx.fillStyle='#8b949e';vzCtx.font='bold 11px monospace';
+    vzCtx.fillText(`v=${vi}`,4,y+ROW_H/2+5);
+
+    for(let col=0;col<nCols;col++){
+      const hStart=col*(H_TOTAL/nCols);
+      const hEnd=hStart+(H_TOTAL/nCols);
+      const x0=LABEL_W+col*(W-LABEL_W)/nCols;
+      const cw=(W-LABEL_W)/nCols;
+
+      // Draw pixel-level colored strip
+      for(let h=hStart;h<hEnd;h++){
+        const s=sig(vi,h);
+        const px=x0+(h-hStart)*cw/(H_TOTAL/nCols);
+        vzCtx.fillStyle=RC[s.rgn]||'#0e1015';
+        vzCtx.fillRect(px,y+4,cw/(H_TOTAL/nCols)+0.5,ROW_H-8);
+        if(s.csync){vzCtx.fillStyle='#ffffff18';vzCtx.fillRect(px,y+4,cw/(H_TOTAL/nCols)+0.5,ROW_H-8);}
+      }
+
+      // Draw csync waveform overlay
+      const SH=Math.min(ROW_H-10,28);
+      const SY=y+(ROW_H-SH)/2;
+      vzCtx.beginPath();vzCtx.strokeStyle='#f7816699';vzCtx.lineWidth=1.5;
+      let pm=null;
+      for(let h=hStart;h<=hEnd;h++){
+        const s=sig(vi,Math.min(h,H_TOTAL-1));
+        const x=x0+(h-hStart)*cw/(H_TOTAL/nCols);
+        const sy2=s.csync?SY:SY+SH;
+        if(!pm){vzCtx.moveTo(x,sy2);}else if(pm!==s.csync){vzCtx.lineTo(x,pm?SY:SY+SH);vzCtx.lineTo(x,sy2);}else{vzCtx.lineTo(x,sy2);}
+        pm=s.csync;
+      }
+      vzCtx.stroke();
+
+      // Border
+      vzCtx.strokeStyle='#21262d';vzCtx.lineWidth=1;vzCtx.strokeRect(x0,y+4,cw,ROW_H-8);
+    }
+
+    // Half-line divider
+    if(vzResMode==='half'){
+      vzCtx.strokeStyle='#ffffff22';vzCtx.lineWidth=1;vzCtx.setLineDash([3,3]);
+      const mx=LABEL_W+(W-LABEL_W)/2;
+      vzCtx.beginPath();vzCtx.moveTo(mx,y);vzCtx.lineTo(mx,y+ROW_H);vzCtx.stroke();vzCtx.setLineDash([]);
+    }
+
+    // Row region badge
+    const s0=sig(vi,0);
+    const badgeColors={pre_eq:'#f78166',broad:'#d29922',post_eq:'#bc8cff',vblank:'#555',active_f1:'#3fb950',active_f2:'#58a6ff',hsync_line:'#444'};
+    vzCtx.fillStyle=badgeColors[s0.rgn]||'#555';
+    vzCtx.font='10px sans-serif';
+    vzCtx.fillText(RN[s0.rgn]||s0.rgn,LABEL_W+4,y+ROW_H-4);
+  }
+
+  // FSS highlight annotation
+  const fssY=vzFieldN===1?
+    (3-vRange.s)*ROW_H+TOP:
+    (315-vRange.s)*ROW_H+TOP;
+  if(fssY>TOP&&fssY<H){
+    vzCtx.strokeStyle='#bc8cff55';vzCtx.lineWidth=2;vzCtx.setLineDash([]);
+    vzCtx.strokeRect(LABEL_W,fssY,W-LABEL_W,(vzFieldN===1?5:5)*ROW_H);
+    vzCtx.fillStyle='#bc8cff88';vzCtx.font='bold 11px sans-serif';
+    vzCtx.fillText('◄ FSS output HIGH',W-120,fssY+14);
+  }
+
+  // Info
+  const iLines=vzFieldN===1
+    ?'F1 V-Sync: 15 half-lines. Pre-eq (v=0–2 first half): 5×EQ_W=23 clocks low. Broad sync (v=2 second half to v=4): 5×BROAD_W=273 clocks low. Post-eq (v=5–7 first half): 5×EQ_W=23 clocks low. FSS output is HIGH for broad+post-eq (v=3–7).'
+    :'F2 V-Sync: starts at v=312 h=320 (second half). Pre-eq (v=312 second–v=314): 5×EQ_W. Broad (v=315–v=317 first): 5×BROAD_W. Post-eq (v=317 second–v=319): 5×EQ_W. FSS HIGH from v=315 h≥320 to v=320 h<320 (matches old tester scope line 314 last half → 319 first half).';
+  document.getElementById('vz-info').textContent=iLines;
+}
+
+// ════════════════════════════════ NAV
+function nav(id,el){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.ntab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('pg-'+id).classList.add('on');
+  el.classList.add('on');
+  if(id==='osc')resizeOsc();
+  if(id==='sb')resizeSB();
+  if(id==='vz')resizeVZ();
+}
+
+// ════════════════════════════════ INIT + RESIZE
+window.addEventListener('resize',()=>{
+  resizeFrame();
+  const active=document.querySelector('.pg.on');
+  if(active){
+    const id=active.id.replace('pg-','');
+    if(id==='osc')resizeOsc();
+    if(id==='sb')resizeSB();
+    if(id==='vz')resizeVZ();
+  }
+});
+
+// Wait for layout
+setTimeout(()=>{
+  resizeFrame();
+  drawOsc();
+  drawSB();
+  drawVZ();
+  // Start animation
+  toggleAnim();
+},100);
+</script>
+</body>
+</html>
