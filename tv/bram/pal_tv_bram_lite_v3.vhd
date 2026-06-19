@@ -43,9 +43,9 @@ entity pal_tv_bram_lite_v3 is
     STRIPE_W   : integer := 4;
     BRAM_DEPTH : integer := 299520;
     -- Compile-time defaults for all runtime ports
-    V_ACT_S_F1    : integer := 25;
+    V_ACT_S_F1    : integer := 21;
     V_ACT_E_F1    : integer := 311;
-    V_ACT_S_F2    : integer := 337;
+    V_ACT_S_F2    : integer := 334;
     V_ACT_E_F2    : integer := 623;
     FSS_F1_S      : integer := 3;
     FSS_F1_E      : integer := 7;
