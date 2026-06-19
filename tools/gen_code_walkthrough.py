@@ -1917,6 +1917,131 @@ def sec_fifo(doc):
 
 
 # ===========================================================================
+# Section 9 — pal_tv_bram_lite_v2.vhd
+# ===========================================================================
+def sec_bram_lite_v2(doc):
+    doc.add_page_break()
+    heading(doc, '9  pal_tv_bram_lite_v2.vhd  —  PAL BRAM Lite (Extended Patterns)', 1)
+    file_banner(doc,
+                'tv/bram/pal_tv_bram_lite_v2.vhd',
+                'Lightweight single-buffer PAL video core with 7 pattern selections '
+                '(sel 0–6). Extends pal_tv_bram_lite with two 11-zone gradient patterns '
+                '(sel 5/6) and corrected timing outputs for aircraft/MFD applications: '
+                'fss_o (Field Sync Signal), frame_sync_o (25 Hz), and blank_o. '
+                'No double-buffer, no bouncing ball, no crosshatch overlay. '
+                'Dependencies: tv/pal_timing.vhd, tv/opt2_interlaced/pal_csync_il.vhd.')
+
+    heading(doc, '9.1  Pattern Selections', 2)
+    tbl = doc.add_table(rows=8, cols=3)
+    tbl.style = 'Table Grid'
+    hdr = tbl.rows[0].cells
+    for ci, h_ in enumerate(['sel value', 'Pattern', 'Description']):
+        set_cell_bg(hdr[ci], C_NAVY)
+        cp(hdr[ci], h_, bold=True, color=C_WHITE)
+    patterns = [
+        ('0', 'Vertical bars',             '8-zone checkerboard vertical stripes'),
+        ('1', 'Horizontal bars',           '8-zone checkerboard horizontal stripes'),
+        ('2', 'H-gradient (10 zones)',     '10 grey steps, ends at white (rightmost)'),
+        ('3', 'V-gradient (10 zones)',     '10 grey steps, ends at white (bottommost)'),
+        ('4', 'BRAM pixel source',         '1-bit BRAM frame buffer (0=black, 1=brightness)'),
+        ('5', 'H-gradient + black end',   '10 grey steps + 1 black zone = 11 zones total'),
+        ('6', 'V-gradient + black end',   '10 grey steps + 1 black zone = 11 zones total'),
+    ]
+    for i, (s, p, d) in enumerate(patterns):
+        r = tbl.rows[i + 1]
+        set_cell_bg(r.cells[0], C_LTBLUE)
+        cp(r.cells[0], s, bold=True)
+        cp(r.cells[1], p, bold=(s in ('5', '6')))
+        cp(r.cells[2], d)
+    doc.add_paragraph()
+
+    heading(doc, '9.2  Key Timing Constants', 2)
+    code_block(doc, [
+        'constant V_ACT_S_F1 : integer := 25;   -- F1 active video start (v_cnt)',
+        'constant V_ACT_E_F1 : integer := 311;  -- F1 active video end',
+        'constant V_ACT_S_F2 : integer := 337;  -- F2 active video start (v_cnt)',
+        'constant V_ACT_E_F2 : integer := 623;  -- F2 active video end',
+        'constant V_ACTIVE_F : integer := 288;  -- lines per field (zone calculations)',
+    ])
+    expl(doc,
+         'V_ACT_S_F1=25 and V_ACT_S_F2=337 shift active video one line later than '
+         'pal_tv_bram_top. On a 1-625 oscilloscope reference, this makes scope line 24 '
+         'the first F1 video line and scope line 337 the first F2 video line, matching '
+         'the old tester reference. V_ACTIVE_F=288 is kept unchanged for zone-width '
+         'calculations even though the active window is 287 lines after the shift.')
+
+    heading(doc, '9.3  Output Ports', 2)
+    code_block(doc, [
+        'dac_out      : out std_logic_vector(3 downto 0);  -- 4-bit R-2R DAC',
+        'csync_o      : out std_logic;   -- composite sync (HIGH = sync tip)',
+        'line_sync_o  : out std_logic;   -- H-sync, suppressed during vsync',
+        'frame_sync_o : out std_logic;   -- 25 Hz, F1 vsync only (v_cnt <= 7)',
+        'fss_o        : out std_logic;   -- 50 Hz Field Sync Signal',
+        'field_o      : out std_logic;   -- 0=Field1, 1=Field2',
+        'active_o     : out std_logic;   -- active pixel window',
+        'blank_o      : out std_logic;   -- HIGH during H-blank + V-blank',
+    ])
+    expl(doc,
+         'frame_sync_o fires only during F1 vsync (v_cnt<=7) giving a 25 Hz frame '
+         'reference. fss_o is the Field Synchronising Signal at 50 Hz covering the '
+         'broad-sync and post-equalising intervals of every field. '
+         'blank_o = not active_s, staying HIGH for the full 12 µs H-blanking interval '
+         '(front porch + sync + back porch) and all V-blanking lines.')
+
+    heading(doc, '9.4  FSS Logic — Sub-Line Precision', 2)
+    code_block(doc, [
+        '-- F1 FSS: v_cnt 3-7 (line-level, both halves)',
+        '-- F2 FSS: starts at last half of v_cnt=315 (h>=320),',
+        '--         ends at first half of v_cnt=320 (h<320)',
+        'fss_s <= \'1\' when (v_cnt >= 3 and v_cnt <= 7) or',
+        '                  (v_cnt = 315 and h_cnt >= 320) or',
+        '                  (v_cnt >= 316 and v_cnt <= 319) or',
+        '                  (v_cnt = 320 and h_cnt < 320)',
+        '         else \'0\';',
+    ])
+    expl(doc,
+         'PAL interlaced Field 2 starts half a line offset from Field 1 (at v_cnt=312, '
+         'h=320). This shifts the F2 broad-sync start half a line relative to where '
+         'the F1 broad-sync starts. The old tester FSS for F2 therefore begins at '
+         'scope line 314 last half (v_cnt=315, h=320) and ends at scope line 319 first '
+         'half (v_cnt=320, h<320), giving exactly 5 full lines = 320 µs. '
+         'Using h_cnt in the FSS condition achieves this sub-line precision. '
+         'F1 FSS uses whole-line boundaries (v_cnt 3-7) because F1 starts at h=0 '
+         'and no half-line adjustment is needed. '
+         'line_sync_o is independent of fss_o — both are computed separately.')
+
+    heading(doc, '9.5  11-Zone Gradient (sel 5/6)', 2)
+    code_block(doc, [
+        'constant GZONES_B  : integer := 11;',
+        'constant GZONE_W_B : integer := H_ACTIVE / GZONES_B;  -- 47 px per zone',
+        'constant GZONE_H_B : integer := V_ACTIVE_F / GZONES_B; -- 26 lines per zone',
+        '',
+        '-- Zones 0-9: grey gradient  (black_level to white_level)',
+        '-- Zone 10  : black_level    (gbzx_idx >= GZONES = 10)',
+    ])
+    expl(doc,
+         'sel=5 (H-gradient) and sel=6 (V-gradient) use dedicated counters '
+         'gbzx_idx/gbpx_in (horizontal) and gbzy_idx/gbln_in (vertical). '
+         'Zone indices 0-9 map to evenly spaced grey levels between black_level '
+         'and white_level. Zone index 10 outputs black_level, creating a visible '
+         'dark band at the right edge (sel=5) or bottom edge (sel=6). '
+         'This differs from sel=2/3 which end at white and have no black-end zone.')
+
+    heading(doc, '9.6  DAC Output Priority', 2)
+    code_block(doc, [
+        'dac_out <= LEVEL_SYNC   when csync_s  = \'1\' else',
+        '           active_level when active_s = \'1\' else',
+        '           LEVEL_BLANK;',
+    ])
+    expl(doc,
+         'Three-level priority identical to pal_tv_bram_top: '
+         'sync tip (0x0) overrides everything, then pattern video (0x4–0xF) '
+         'during active pixels, then blanking level (0x4) otherwise. '
+         'LEVEL_SYNC="0000", LEVEL_BLANK="0100" are entity generics defaulting '
+         'to standard PAL 4-bit R-2R DAC levels.')
+
+
+# ===========================================================================
 # Main
 # ===========================================================================
 def main():
@@ -1939,6 +2064,7 @@ def main():
     sec_testbench(doc)
     sec_signal_flow(doc)
     sec_fifo(doc)
+    sec_bram_lite_v2(doc)
 
     doc.save(OUT_FILE)
     print(f'Saved: {OUT_FILE}')
