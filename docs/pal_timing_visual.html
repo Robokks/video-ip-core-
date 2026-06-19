@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAL Video IP Core — Timing Visualizer</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --orange: #f78166;
+    --purple: #bc8cff;
+    --cyan: #39d353;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+  h1 { text-align: center; padding: 20px; font-size: 22px; color: var(--accent); letter-spacing: 1px; border-bottom: 1px solid var(--border); }
+  .tabs { display: flex; gap: 2px; padding: 12px 20px 0; border-bottom: 1px solid var(--border); background: var(--panel); }
+  .tab { padding: 8px 20px; border-radius: 6px 6px 0 0; cursor: pointer; color: var(--muted); border: 1px solid transparent; border-bottom: none; transition: all .2s; }
+  .tab.active { background: var(--bg); color: var(--text); border-color: var(--border); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .page { display: none; padding: 24px 20px; }
+  .page.active { display: block; }
+  /* ── Legend chips ── */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .chip { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  /* ── Frame map ── */
+  #frameCanvas { display: block; margin: 0 auto; cursor: crosshair; }
+  .info-box { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-top: 14px; min-height: 56px; font-size: 13px; line-height: 1.8; }
+  /* ── H timing ── */
+  #hCanvas { display: block; margin: 0 auto; }
+  /* ── Scope lines ── */
+  table.scope { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+  table.scope th { background: var(--panel); padding: 6px 10px; text-align: left; border: 1px solid var(--border); color: var(--accent); }
+  table.scope td { padding: 5px 10px; border: 1px solid var(--border); }
+  table.scope tr:nth-child(even) td { background: #1a1f27; }
+  /* ── Signal diagram ── */
+  #sigCanvas { display: block; margin: 0 auto; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; flex: 1; min-width: 260px; margin-bottom: 14px; }
+  .card h3 { color: var(--accent); margin-bottom: 10px; font-size: 13px; }
+  .card p { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  .card code { color: var(--cyan); background: #1a1f27; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+  .slider-row { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+  .slider-row label { color: var(--muted); font-size: 12px; min-width: 90px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); }
+  .val-badge { background: var(--accent); color: #000; border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 700; min-width: 44px; text-align: center; }
+</style>
+</head>
+<body>
+<h1>PAL Video IP Core — Interactive Timing Visualizer</h1>
+<div class="tabs">
+  <div class="tab active" onclick="showPage('frame')">Frame Map</div>
+  <div class="tab" onclick="showPage('hline')">H-Line Timing</div>
+  <div class="tab" onclick="showPage('vsync')">V-Sync Detail</div>
+  <div class="tab" onclick="showPage('signals')">Signal Waveforms</div>
+  <div class="tab" onclick="showPage('scope')">Scope Line Table</div>
+  <div class="tab" onclick="showPage('about')">How It Works</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PAGE: FRAME MAP -->
+<div id="page-frame" class="page active">
+  <div class="legend">
+    <span class="chip" style="background:#1a3a1a;color:#3fb950;border:1px solid #3fb950">Active Video (F1)</span>
+    <span class="chip" style="background:#1a2a3a;color:#58a6ff;border:1px solid #58a6ff">Active Video (F2)</span>
+    <span class="chip" style="background:#3a1a1a;color:#f78166;border:1px solid #f78166">Pre-Equalising</span>
+    <span class="chip" style="background:#3a2a1a;color:#d29922;border:1px solid #d29922">Broad Sync (FSS)</span>
+    <span class="chip" style="background:#2a1a3a;color:#bc8cff;border:1px solid #bc8cff">Post-Equalising (FSS)</span>
+    <span class="chip" style="background:#1a1a1a;color:#8b949e;border:1px solid #30363d">Vertical Blank</span>
+    <span class="chip" style="background:#222;color:#e6edf3;border:1px solid #30363d">H-Sync Lines</span>
+  </div>
+  <canvas id="frameCanvas" width="900" height="540"></canvas>
+  <div class="info-box" id="frameInfo">Hover over the frame map to inspect any line. Each row = 1 PAL line (v_cnt). Each column = groups of h_cnt pixels.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PAGE: H-LINE -->
+<div id="page-hline" class="page">
+  <div class="slider-row">
+    <label>v_cnt (line)</label>
+    <input type="range" id="vSlider" min="0" max="624" value="50" oninput="drawHLine()">
+    <span class="val-badge" id="vVal">50</span>
+  </div>
+  <canvas id="hCanvas" width="900" height="260"></canvas>
+  <div class="info-box" id="hInfo">Drag the slider to inspect different lines.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PAGE: VSYNC -->
+<div id="page-vsync" class="page">
+  <div class="legend">
+    <span class="chip" style="background:#3a1a1a;color:#f78166;border:1px solid #f78166">Pre-Equalising (EQ_W=23)</span>
+    <span class="chip" style="background:#3a2a1a;color:#d29922;border:1px solid #d29922">Broad Sync (BROAD_W=273)</span>
+    <span class="chip" style="background:#2a1a3a;color:#bc8cff;border:1px solid #bc8cff">Post-Equalising (EQ_W=23)</span>
+    <span class="chip" style="background:#1a1a2a;color:#58a6ff;border:1px solid #58a6ff">Normal H-Sync</span>
+  </div>
+  <canvas id="vsyncCanvas" width="900" height="480"></canvas>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PAGE: SIGNALS -->
+<div id="page-signals" class="page">
+  <div class="slider-row">
+    <label>Start line</label>
+    <input type="range" id="sigSlider" min="0" max="615" value="0" oninput="drawSignals()">
+    <span class="val-badge" id="sigVal">0</span>
+    &nbsp;<span style="color:var(--muted);font-size:12px">(shows 10 lines)</span>
+  </div>
+  <canvas id="sigCanvas" width="900" height="500"></canvas>
+  <div class="info-box" id="sigInfo">Drag slider to scroll through all 625 lines.</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PAGE: SCOPE TABLE -->
+<div id="page-scope" class="page">
+  <div style="color:var(--muted);font-size:12px;margin-bottom:12px">Oscilloscope line numbers (1-based) → v_cnt (0-based) mapping. F1 = lines 1–312, F2 = lines 313–625.</div>
+  <div style="max-height:520px;overflow-y:auto;">
+  <table class="scope" id="scopeTable"></table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ PAGE: ABOUT -->
+<div id="page-about" class="page">
+  <div class="row">
+    <div class="card">
+      <h3>PAL Frame Structure</h3>
+      <p>625 lines per frame, 50 fields/sec, 25 frames/sec.<br>
+      <b>Field 1</b>: v_cnt 0–311 (scope lines 1–312)<br>
+      <b>Field 2</b>: v_cnt 312–624 (scope lines 313–625)<br>
+      F2 starts at v_cnt=312, <b>h_cnt=320</b> (half-line offset — the key to interlacing).</p>
+    </div>
+    <div class="card">
+      <h3>Pixel Clock</h3>
+      <p>10 MHz pixel clock → <b>640 pixels per line</b> = 64 µs.<br>
+      Board clock can be 10/20/30/40 MHz; <code>CLK_MHZ</code> generic divides it down.<br>
+      <b>V_TOTAL = 625</b> lines × 64 µs = 40 ms → 25 Hz frame rate.</p>
+    </div>
+    <div class="card">
+      <h3>H Timing (one line)</h3>
+      <p><code>H_FRONT=16</code> → <code>H_SYNC_W=47</code> → <code>H_BACK=57</code> → <code>H_ACTIVE=520</code><br>
+      Sync tip: h_cnt 16–62 (4.7 µs LOW on csync).<br>
+      Active pixels: h_cnt 120–639 (52 µs).</p>
+    </div>
+    <div class="card">
+      <h3>V-Sync Pulse Sequence</h3>
+      <p>15 half-lines around each field boundary:<br>
+      <b>5× Pre-equalising</b>: 2.3 µs LOW per half-line<br>
+      <b>5× Broad sync</b>: 27.3 µs LOW (fills half-line)<br>
+      <b>5× Post-equalising</b>: 2.3 µs LOW per half-line</p>
+    </div>
+    <div class="card">
+      <h3>FSS Output</h3>
+      <p>Field Synchronising Signal — 50 Hz square wave.<br>
+      F1 FSS: v_cnt 3–7 (lines 4–8 scope).<br>
+      F2 FSS: v_cnt=315 h≥320 → v_cnt=320 h&lt;320<br>
+      (starts scope line 314 last half, ends line 319 first half).</p>
+    </div>
+    <div class="card">
+      <h3>Active Video Windows</h3>
+      <p>F1 active: v_cnt 25–311, h_cnt 120–639<br>
+      F2 active: v_cnt 337–623, h_cnt 120–639<br>
+      288 lines per field × 520 pixels = 149,760 px/field.<br>
+      BRAM stores 2 fields → 299,520 bits.</p>
+    </div>
+    <div class="card">
+      <h3>DAC Levels (4-bit R-2R)</h3>
+      <p><code>LEVEL_SYNC  = 0x0</code> → 0 V (sync tip)<br>
+      <code>LEVEL_BLANK = 0x4</code> → back porch / blanking<br>
+      <code>LEVEL_WHITE = 0xF</code> → peak white (video)</p>
+    </div>
+    <div class="card">
+      <h3>BRAM Frame Buffer</h3>
+      <p>1-bit per pixel, double-buffered (ping-pong).<br>
+      Write side: CPU/DMA fills next frame.<br>
+      Read side: pixel engine reads current frame.<br>
+      Swap on v_cnt=V_FRAME_S → tear-free output.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════ CONSTANTS (from VHDL)
+const H_FRONT   = 16, H_SYNC_W = 47, H_BACK = 57, H_ACTIVE = 520, H_TOTAL = 640;
+const H_ACT_S   = H_FRONT + H_SYNC_W + H_BACK;  // 120
+const HALF      = 320, EQ_W = 23, BROAD_W = 273;
+const V_TOTAL   = 625;
+const V_ACT_S_F1 = 25, V_ACT_E_F1 = 311;
+const V_ACT_S_F2 = 337, V_ACT_E_F2 = 623;
+
+// ══════════════════════════════════ HELPER: classify a (v,h) pixel
+function classify(v, h) {
+  const first_h = h < HALF;
+  const hp = first_h ? h : h - HALF;
+
+  // Field 1 vsync half-lines
+  const f1p = (v===0)||(v===1)||(v===2 && first_h);
+  const f1b = (v===2 && !first_h)||(v===3)||(v===4);
+  const f1q = (v===5)||(v===6)||(v===7 && first_h);
+  // Field 2 vsync half-lines
+  const f2p = (v===312 && !first_h)||(v===313)||(v===314);
+  const f2b = (v===315)||(v===316)||(v===317 && first_h);
+  const f2q = (v===317 && !first_h)||(v===318)||(v===319);
+
+  const in_eq  = f1p||f1q||f2p||f2q;
+  const in_brd = f1b||f2b;
+  const in_vsync = (v<=7)||(v>=312 && v<=319);
+
+  // csync
+  let csync = 0;
+  if (in_eq && hp < EQ_W) csync = 1;
+  else if (in_brd && hp < BROAD_W) csync = 1;
+  else if (!in_eq && !in_brd && h>=H_FRONT && h<H_FRONT+H_SYNC_W) csync = 1;
+
+  // active
+  const active = (v>=V_ACT_S_F1 && v<=V_ACT_E_F1 && h>=H_ACT_S) ||
+                 (v>=V_ACT_S_F2 && v<=V_ACT_E_F2 && h>=H_ACT_S);
+
+  // field
+  const field = (v>312)||(v===312 && !first_h) ? 2 : 1;
+
+  // FSS
+  const fss = (v>=3&&v<=7) ||
+              (v===315&&h>=320) || (v>=316&&v<=319) || (v===320&&h<320);
+
+  // region label
+  let region = 'vblank';
+  if (in_eq)  region = 'pre_eq';
+  if (in_brd) region = 'broad';
+  if (f1q||f2q) region = 'post_eq';
+  if (active) region = field===1 ? 'active_f1' : 'active_f2';
+  if (csync && !in_eq && !in_brd) region = 'hsync_line';
+
+  return { csync, active, field, fss, in_eq, in_brd, in_vsync, region, hp, first_h, f1p,f1b,f1q,f2p,f2b,f2q };
+}
+
+const REGION_COLOR = {
+  active_f1:  '#1a3a1a',
+  active_f2:  '#1a2a3a',
+  pre_eq:     '#3a1a1a',
+  broad:      '#3a2a1a',
+  post_eq:    '#2a1a3a',
+  hsync_line: '#1e1e2e',
+  vblank:     '#131313',
+};
+const REGION_BORDER = {
+  active_f1:  '#3fb950',
+  active_f2:  '#58a6ff',
+  pre_eq:     '#f78166',
+  broad:      '#d29922',
+  post_eq:    '#bc8cff',
+  hsync_line: '#444',
+  vblank:     '#222',
+};
+
+// ══════════════════════════════════ PAGE: FRAME MAP
+const frameC = document.getElementById('frameCanvas');
+const frameCtx = frameC.getContext('2d');
+const F_W = 900, F_H = 540;
+// Each row = 1 line; we compress H into 1 pixel per group
+const ROW_H = F_H / V_TOTAL;  // ~0.864 px — use 1px rows on a virtual canvas
+
+function drawFrame() {
+  // Use an offscreen image for speed
+  const imgData = frameCtx.createImageData(F_W, F_H);
+  const d = imgData.data;
+  for (let py = 0; py < F_H; py++) {
+    const v = Math.floor(py * V_TOTAL / F_H);
+    for (let px = 0; px < F_W; px++) {
+      const h = Math.floor(px * H_TOTAL / F_W);
+      const cls = classify(v, h);
+      const col = hexToRgb(REGION_COLOR[cls.region] || '#131313');
+      // tint for csync
+      let r = col.r, g = col.g, b = col.b;
+      if (cls.csync) { r = Math.min(255, r+60); g = Math.min(255, g+60); b = Math.min(255, b+60); }
+      const idx = (py * F_W + px) * 4;
+      d[idx]=r; d[idx+1]=g; d[idx+2]=b; d[idx+3]=255;
+    }
+  }
+  frameCtx.putImageData(imgData, 0, 0);
+
+  // Draw axis labels
+  frameCtx.fillStyle = '#8b949e';
+  frameCtx.font = '11px monospace';
+  // Left axis (v_cnt)
+  for (let v of [0,100,200,300,312,400,500,600,624]) {
+    const py = v * F_H / V_TOTAL;
+    frameCtx.fillText(String(v).padStart(3,' '), 2, py + 4);
+  }
+  // Horizontal dashed line at v=312
+  frameCtx.setLineDash([4,3]);
+  frameCtx.strokeStyle = '#58a6ff44';
+  frameCtx.lineWidth = 1;
+  frameCtx.beginPath();
+  const y312 = 312 * F_H / V_TOTAL;
+  frameCtx.moveTo(30, y312); frameCtx.lineTo(F_W, y312);
+  frameCtx.stroke();
+  frameCtx.setLineDash([]);
+
+  // Annotation: F1 / F2
+  frameCtx.fillStyle = '#3fb95088';
+  frameCtx.font = 'bold 13px sans-serif';
+  frameCtx.fillText('FIELD 1 (v_cnt 0–311)', F_W/2 - 90, y312/2 + 6);
+  frameCtx.fillStyle = '#58a6ff88';
+  frameCtx.fillText('FIELD 2 (v_cnt 312–624)', F_W/2 - 90, y312 + (F_H-y312)/2 + 6);
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return {r,g,b};
+}
+
+// Hover tooltip
+frameC.addEventListener('mousemove', function(e) {
+  const rect = frameC.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const v = Math.floor(py * V_TOTAL / F_H);
+  const h = Math.floor(px * H_TOTAL / F_W);
+  const cls = classify(v, h);
+  const scopeLine = v < 312 ? v+1 : v;  // rough
+  let regionName = {
+    active_f1:'Active Video F1', active_f2:'Active Video F2',
+    pre_eq:'Pre-Equalising Pulse', broad:'Broad Sync (FSS on)',
+    post_eq:'Post-Equalising Pulse (FSS on)', vblank:'Vertical Blank',
+    hsync_line:'H-Sync Line'
+  }[cls.region] || cls.region;
+
+  document.getElementById('frameInfo').innerHTML =
+    `<b>v_cnt = ${v}</b> &nbsp;|&nbsp; <b>h_cnt = ${h}</b> &nbsp;|&nbsp; ` +
+    `Field: <b>${cls.field}</b> &nbsp;|&nbsp; Region: <b>${regionName}</b><br>` +
+    `csync = <b style="color:${cls.csync?'#f78166':'#3fb950'}">${cls.csync}</b> &nbsp;` +
+    `active = <b style="color:${cls.active?'#3fb950':'#8b949e'}">${cls.active?1:0}</b> &nbsp;` +
+    `FSS = <b style="color:${cls.fss?'#bc8cff':'#8b949e'}">${cls.fss?1:0}</b> &nbsp;` +
+    `hp = <b>${cls.hp}</b> (position in half-line)`;
+});
+
+// ══════════════════════════════════ PAGE: H-LINE
+const hC = document.getElementById('hCanvas');
+const hCtx = hC.getContext('2d');
+const H_CW = 900, H_CH = 260;
+
+function drawHLine() {
+  const v = parseInt(document.getElementById('vSlider').value);
+  document.getElementById('vVal').textContent = v;
+  hCtx.clearRect(0, 0, H_CW, H_CH);
+  hCtx.fillStyle = '#0d1117';
+  hCtx.fillRect(0, 0, H_CW, H_CH);
+
+  const PX = H_CW / H_TOTAL;  // pixels per h_cnt unit
+  const TOP = 60, H = 100;    // waveform area
+
+  // Draw colored regions
+  for (let h = 0; h < H_TOTAL; h++) {
+    const cls = classify(v, h);
+    const x = h * PX;
+    hCtx.fillStyle = REGION_COLOR[cls.region] || '#131313';
+    hCtx.fillRect(x, TOP - 30, PX + 0.5, H + 30);
+  }
+
+  // Draw csync waveform
+  hCtx.beginPath();
+  hCtx.strokeStyle = '#f78166';
+  hCtx.lineWidth = 2.5;
+  let prev = null;
+  for (let h = 0; h <= H_TOTAL; h++) {
+    const cls = classify(v, Math.min(h, H_TOTAL-1));
+    const x = h * PX;
+    const y = cls.csync ? TOP : TOP + H;
+    if (prev === null) { hCtx.moveTo(x, y); }
+    else {
+      if (prev.csync !== cls.csync) { hCtx.lineTo(x, prev.csync ? TOP : TOP+H); hCtx.lineTo(x, y); }
+      else { hCtx.lineTo(x, y); }
+    }
+    prev = cls;
+  }
+  hCtx.stroke();
+
+  // Draw active waveform (offset)
+  hCtx.beginPath();
+  hCtx.strokeStyle = '#3fb950';
+  hCtx.lineWidth = 2;
+  prev = null;
+  const AT = TOP + H + 30, AH = 40;
+  for (let h = 0; h <= H_TOTAL; h++) {
+    const cls = classify(v, Math.min(h, H_TOTAL-1));
+    const x = h * PX;
+    const y = cls.active ? AT : AT + AH;
+    if (prev === null) { hCtx.moveTo(x, y); }
+    else {
+      if (prev.active !== cls.active) { hCtx.lineTo(x, prev.active?AT:AT+AH); hCtx.lineTo(x, y); }
+      else { hCtx.lineTo(x, y); }
+    }
+    prev = cls;
+  }
+  hCtx.stroke();
+
+  // Axis labels
+  hCtx.fillStyle = '#8b949e';
+  hCtx.font = '11px monospace';
+  for (let h of [0, H_FRONT, H_FRONT+H_SYNC_W, H_ACT_S, HALF, H_TOTAL]) {
+    const x = h * PX;
+    hCtx.fillStyle = '#30363d';
+    hCtx.fillRect(x, 0, 1, H_CH);
+    hCtx.fillStyle = '#8b949e';
+    hCtx.fillText(h, x + 2, H_CH - 4);
+  }
+  // Signal labels
+  hCtx.fillStyle = '#f78166';
+  hCtx.font = 'bold 12px sans-serif';
+  hCtx.fillText('csync', 4, TOP - 8);
+  hCtx.fillStyle = '#3fb950';
+  hCtx.fillText('active', 4, AT - 8);
+  // Title
+  hCtx.fillStyle = '#e6edf3';
+  hCtx.font = 'bold 13px sans-serif';
+  hCtx.fillText(`v_cnt = ${v}  (scope line ≈ ${v<312?v+1:v})`, 300, 22);
+
+  // Highlight regions text
+  const regions = ['H_FRONT\n0–15','H_SYNC_W\n16–62','H_BACK\n63–119','H_ACTIVE\n120–639'];
+  const xs = [0, H_FRONT, H_FRONT+H_SYNC_W, H_ACT_S];
+  const xe = [H_FRONT, H_FRONT+H_SYNC_W, H_ACT_S, H_TOTAL];
+  const cols = ['#444','#f78166','#58a6ff','#3fb950'];
+  for (let i = 0; i < 4; i++) {
+    const cx = ((xs[i]+xe[i])/2) * PX;
+    hCtx.fillStyle = cols[i];
+    hCtx.font = '10px monospace';
+    const lines2 = regions[i].split('\n');
+    hCtx.fillText(lines2[0], cx - 25, 36);
+    hCtx.fillText(lines2[1], cx - 25, 50);
+  }
+
+  // Info
+  const cls0 = classify(v, 0);
+  let info = `Line v_cnt=${v}: Field ${cls0.field}`;
+  if (cls0.in_eq) info += ' | Pre/Post-Equalising region';
+  else if (cls0.in_brd) info += ' | Broad-Sync (FSS) region';
+  else if (v<=7||v>=312&&v<=319) info += ' | V-Sync region';
+  else if (v>=V_ACT_S_F1&&v<=V_ACT_E_F1||v>=V_ACT_S_F2&&v<=V_ACT_E_F2) info += ' | Active video line';
+  else info += ' | Vertical blank line';
+  document.getElementById('hInfo').textContent = info;
+}
+
+// ══════════════════════════════════ PAGE: VSYNC DETAIL
+const vsC = document.getElementById('vsyncCanvas');
+const vsCtx = vsC.getContext('2d');
+
+function drawVsync() {
+  const W = 900, H = 480;
+  vsCtx.clearRect(0, 0, W, H);
+  vsCtx.fillStyle = '#0d1117';
+  vsCtx.fillRect(0, 0, W, H);
+
+  // Show v_cnt 0–10 (F1 vsync) and v_cnt 312–320 (F2 vsync)
+  // Side by side
+  const drawField = (title, startV, endV, ox, oy, fw, fh, col_border) => {
+    const nLines = endV - startV + 1;
+    const lh = fh / nLines;  // height per half-line pair
+    vsCtx.font = 'bold 13px sans-serif';
+    vsCtx.fillStyle = col_border;
+    vsCtx.fillText(title, ox, oy - 8);
+
+    for (let vi = startV; vi <= endV; vi++) {
+      const row = vi - startV;
+      const y0 = oy + row * lh;
+      // First half
+      const c1 = classify(vi, 0);
+      const c2 = classify(vi, HALF);
+      [c1, c2].forEach((cls, hi) => {
+        const x0 = ox + hi * fw/2;
+        const bw = fw/2;
+        vsCtx.fillStyle = REGION_COLOR[cls.region] || '#131313';
+        vsCtx.fillRect(x0, y0, bw, lh - 1);
+        vsCtx.strokeStyle = '#30363d';
+        vsCtx.lineWidth = 0.5;
+        vsCtx.strokeRect(x0, y0, bw, lh - 1);
+        // EQ/BROAD pulse within the half-line
+        if (cls.in_eq) {
+          const pw = EQ_W * bw / HALF;
+          vsCtx.fillStyle = '#f7816688';
+          vsCtx.fillRect(x0, y0, pw, lh - 1);
+        } else if (cls.in_brd) {
+          const pw = BROAD_W * bw / HALF;
+          vsCtx.fillStyle = '#d2992288';
+          vsCtx.fillRect(x0, y0, pw, lh - 1);
+        } else {
+          const hx = H_FRONT * bw / HALF;
+          const hw = H_SYNC_W * bw / HALF;
+          vsCtx.fillStyle = '#58a6ff44';
+          vsCtx.fillRect(x0 + hx, y0, hw, lh - 1);
+        }
+      });
+      // Label
+      vsCtx.fillStyle = '#8b949e';
+      vsCtx.font = '10px monospace';
+      vsCtx.fillText(`v=${vi}`, ox - 40, y0 + lh/2 + 4);
+      // Half-line divider
+      vsCtx.fillStyle = '#30363d';
+      vsCtx.fillRect(ox + fw/2 - 0.5, y0, 1, lh);
+    }
+    // Border
+    vsCtx.strokeStyle = col_border + '88';
+    vsCtx.lineWidth = 1.5;
+    vsCtx.setLineDash([]);
+    vsCtx.strokeRect(ox, oy, fw, fh);
+  };
+
+  drawField('FIELD 1 V-Sync (v_cnt 0–8)',   0,   8, 60,  30, 380, 200, '#3fb950');
+  drawField('FIELD 2 V-Sync (v_cnt 312–320)', 312, 320, 60, 260, 380, 200, '#58a6ff');
+
+  // Legend
+  vsCtx.font = '11px monospace';
+  const legendItems = [
+    ['#f7816688','Pre/Post-Equalising pulse (23px / 2.3µs)'],
+    ['#d2992288','Broad sync pulse (273px / 27.3µs)'],
+    ['#58a6ff44','Normal H-sync (47px / 4.7µs)'],
+  ];
+  legendItems.forEach(([col,label],i) => {
+    const lx = 480, ly = 30 + i * 22;
+    vsCtx.fillStyle = col;
+    vsCtx.fillRect(lx, ly, 18, 14);
+    vsCtx.strokeStyle = '#555';
+    vsCtx.strokeRect(lx, ly, 18, 14);
+    vsCtx.fillStyle = '#e6edf3';
+    vsCtx.fillText(label, lx+24, ly+11);
+  });
+
+  // Annotation: half-line divider explanation
+  vsCtx.fillStyle = '#8b949e88';
+  vsCtx.font = 'italic 11px sans-serif';
+  vsCtx.fillText('◄ first half (h=0–319) │ second half (h=320–639) ►', 75, 245);
+  vsCtx.fillText('◄ first half (h=0–319) │ second half (h=320–639) ►', 75, 472);
+
+  // Note about F2 half-line offset
+  vsCtx.fillStyle = '#58a6ff';
+  vsCtx.font = '11px sans-serif';
+  vsCtx.fillText('★ F2 starts at v=312, h=320 (second half of line 312)', 480, 100);
+  vsCtx.fillText('★ FSS output: post-eq starts at v=315 h≥320', 480, 120);
+  vsCtx.fillText('★ FSS output ends at v=320 h<320', 480, 140);
+}
+
+// ══════════════════════════════════ PAGE: SIGNAL WAVEFORMS
+const sigC = document.getElementById('sigCanvas');
+const sigCtx = sigC.getContext('2d');
+
+function drawSignals() {
+  const startV = parseInt(document.getElementById('sigSlider').value);
+  document.getElementById('sigVal').textContent = startV;
+  const W = 900, H = 500;
+  sigCtx.clearRect(0, 0, W, H);
+  sigCtx.fillStyle = '#0d1117';
+  sigCtx.fillRect(0, 0, W, H);
+
+  const TRACKS = [
+    {label:'csync', key:'csync', color:'#f78166'},
+    {label:'FSS',   key:'fss',   color:'#bc8cff'},
+    {label:'active',key:'active',color:'#3fb950'},
+  ];
+  const N_LINES = 10;
+  const lw = (W - 100) / N_LINES;  // width per line
+  const TRACK_H = 80, TRACK_GAP = 30, TRACK_TOP = 40;
+
+  TRACKS.forEach((tr, ti) => {
+    const ty = TRACK_TOP + ti * (TRACK_H + TRACK_GAP);
+    // Track label
+    sigCtx.fillStyle = tr.color;
+    sigCtx.font = 'bold 12px monospace';
+    sigCtx.fillText(tr.label, 4, ty + TRACK_H/2 + 5);
+    // Track background
+    sigCtx.fillStyle = '#111';
+    sigCtx.fillRect(100, ty, W-100, TRACK_H);
+    sigCtx.strokeStyle = '#222';
+    sigCtx.strokeRect(100, ty, W-100, TRACK_H);
+
+    // Draw waveform across all lines
+    const SIG_H = TRACK_H - 16;
+    sigCtx.beginPath();
+    sigCtx.strokeStyle = tr.color;
+    sigCtx.lineWidth = 2;
+    let moved = false;
+    const H_PER_LINE = lw / H_TOTAL;
+
+    for (let li = 0; li < N_LINES; li++) {
+      const v = (startV + li) % V_TOTAL;
+      const x0 = 100 + li * lw;
+      // Vertical line divider
+      sigCtx.fillStyle = '#1e2430';
+      sigCtx.fillRect(x0, ty, 1, TRACK_H);
+
+      // v_cnt label below
+      if (ti === TRACKS.length - 1) {
+        sigCtx.fillStyle = '#8b949e';
+        sigCtx.font = '9px monospace';
+        sigCtx.fillText(`v=${v}`, x0 + 2, ty + TRACK_H + 16);
+      }
+
+      for (let h = 0; h < H_TOTAL; h++) {
+        const cls = classify(v, h);
+        let val;
+        if (tr.key === 'csync') val = cls.csync;
+        else if (tr.key === 'fss') val = cls.fss ? 1 : 0;
+        else val = cls.active ? 1 : 0;
+
+        const x = x0 + h * H_PER_LINE;
+        const y = ty + 8 + (1 - val) * SIG_H;
+        if (!moved) { sigCtx.moveTo(x, y); moved = true; }
+        else sigCtx.lineTo(x, y);
+      }
+    }
+    sigCtx.stroke();
+  });
+
+  // Axis
+  sigCtx.fillStyle = '#8b949e';
+  sigCtx.font = '10px monospace';
+  sigCtx.fillText('← 10 lines shown →', W/2 - 50, H - 8);
+
+  document.getElementById('sigInfo').textContent =
+    `Showing v_cnt ${startV}–${(startV+9)%V_TOTAL}. Each column = 1 line (64 µs). Waveforms: csync (orange), FSS (purple), active (green).`;
+}
+
+// ══════════════════════════════════ PAGE: SCOPE TABLE
+function buildScopeTable() {
+  const tbl = document.getElementById('scopeTable');
+  let html = '<tr><th>Scope Line (1-based)</th><th>v_cnt (0-based)</th><th>Field</th><th>Region</th><th>csync</th><th>active</th><th>FSS</th></tr>';
+  for (let scope = 1; scope <= 625; scope++) {
+    // F1: scope 1-312 → v_cnt 0-311; F2: scope 313-625 → v_cnt 312-624
+    const v = scope <= 312 ? scope - 1 : scope - 1;  // same mapping
+    const cls = classify(v, 0);  // check h=0 for quick region
+    const clsA = classify(v, H_ACT_S);  // mid-active area
+    const regionNames = {
+      active_f1:'Active F1', active_f2:'Active F2',
+      pre_eq:'Pre-Equalising', broad:'Broad Sync',
+      post_eq:'Post-Equalising', vblank:'V-Blank', hsync_line:'H-Sync'
+    };
+    let regColor = '';
+    if (cls.region.startsWith('active')) regColor = 'color:#3fb950';
+    else if (cls.region==='broad'||cls.region==='post_eq') regColor = 'color:#bc8cff';
+    else if (cls.region==='pre_eq') regColor = 'color:#f78166';
+
+    html += `<tr>
+      <td>${scope}</td>
+      <td>${v}</td>
+      <td>${cls.field}</td>
+      <td style="${regColor}">${regionNames[cls.region]||cls.region}</td>
+      <td style="color:${classify(v,H_FRONT).csync?'#f78166':'#555'}">${classify(v,H_FRONT).csync?'●':'-'}</td>
+      <td style="color:${clsA.active?'#3fb950':'#555'}">${clsA.active?'●':'-'}</td>
+      <td style="color:${cls.fss?'#bc8cff':'#555'}">${cls.fss?'●':'-'}</td>
+    </tr>`;
+  }
+  tbl.innerHTML = html;
+}
+
+// ══════════════════════════════════ TAB SWITCHING
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  event.target.classList.add('active');
+  if (id==='hline') drawHLine();
+  if (id==='vsync') drawVsync();
+  if (id==='signals') drawSignals();
+  if (id==='scope') buildScopeTable();
+}
+
+// ══════════════════════════════════ INIT
+drawFrame();
+drawHLine();
+</script>
+</body>
+</html>
