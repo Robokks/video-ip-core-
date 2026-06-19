@@ -41,7 +41,7 @@ begin
   uut : entity work.pal_tv_bram_lite_v2
     generic map (
       CLK_MHZ    => 10,
-      BRAM_DEPTH => 299520
+      BRAM_DEPTH => 1040
     )
     port map (
       clk          => clk,
