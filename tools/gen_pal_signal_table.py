@@ -39,26 +39,19 @@ def classify_line(v: int):
     scope = v + 1          # scope line number (1-based for F1)
 
     # ---- LS (horizontal line sync) ----------------------------------------
-    # LS is present on every line EXCEPT during the broad-sync band (v 2 second
-    # half through v 4 inclusive) where broad pulses replace it.
-    # For this analysis we mark LS present on all non-broad lines.
-    broad_full = (v == 3 or v == 4)
-    broad_half = (v == 2)   # second half only
-    if broad_full:
+    # Standard H-sync is ABSENT during the entire sync pulse region (v_cnt 0-7):
+    # pre-equalising, broad sync, and post-equalising ALL replace the normal LS.
+    # Normal H-sync resumes from line 9 (v_cnt=8) onwards.
+    if v <= 7:
         ls = 'NA'
-    elif broad_half:
-        ls = 'Half Signal'  # LS appears in first half before broad takes over
     else:
         ls = 'A'
 
     # ---- FSS (Field Sync Signal) -------------------------------------------
+    # VHDL uses a plain range check: v_cnt >= FSS_F1_S and v_cnt <= FSS_F1_E
+    # so FSS is HIGH for the FULL LINE at every v_cnt in 3..7 (scope lines 4-8).
     if FSS_F1_S <= v <= FSS_F1_E:
-        if v == FSS_F1_S:          # v==3, full line
-            fss = 'A'
-        elif v == FSS_F1_E:        # v==7, first half only
-            fss = 'Half Signal'
-        else:
-            fss = 'A'
+        fss = 'A'
     else:
         fss = 'NA'
 
