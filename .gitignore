@@ -1,3 +1,4 @@
 **/work/
 **/work-obj*.cf
 sim/pal_lite_v2.vcd
+__pycache__/
