@@ -39,7 +39,19 @@ entity pal_tv_bram_lite_v2 is
     LEVEL_WHITE: std_logic_vector(3 downto 0) := "1111";
     CLK_MHZ    : integer := 40;
     STRIPE_W   : integer := 4;
-    BRAM_DEPTH : integer := 299520
+    BRAM_DEPTH : integer := 299520;
+    -- Active video / composite blank boundaries (override without recompile)
+    V_ACT_S_F1 : integer := 25;
+    V_ACT_E_F1 : integer := 311;
+    V_ACT_S_F2 : integer := 337;
+    V_ACT_E_F2 : integer := 623;
+    -- FSS boundaries (Field Sync Signal, override without recompile)
+    FSS_F1_S   : integer := 3;    -- F1 FSS start v_cnt
+    FSS_F1_E   : integer := 7;    -- F1 FSS end v_cnt
+    FSS_F2_SV  : integer := 315;  -- F2 FSS start v_cnt
+    FSS_F2_SH  : integer := 320;  -- F2 FSS start h_cnt threshold (h >= this)
+    FSS_F2_EV  : integer := 320;  -- F2 FSS end v_cnt
+    FSS_F2_EH  : integer := 320   -- F2 FSS end h_cnt threshold (h < this)
   );
   port (
     clk          : in  std_logic;
@@ -54,6 +66,19 @@ entity pal_tv_bram_lite_v2 is
     bram_wr_addr : in  std_logic_vector(18 downto 0) := (others => '0');
     bram_wr_data : in  std_logic                     := '0';
     bram_len     : in  std_logic_vector(18 downto 0) := (others => '1');
+    -- Runtime timing control (write from CRIO/host at runtime; 0 = use generic default)
+    -- Active video / composite blank window
+    v_act_s_f1_p : in  std_logic_vector(9 downto 0) := (others => '0');
+    v_act_e_f1_p : in  std_logic_vector(9 downto 0) := (others => '0');
+    v_act_s_f2_p : in  std_logic_vector(9 downto 0) := (others => '0');
+    v_act_e_f2_p : in  std_logic_vector(9 downto 0) := (others => '0');
+    -- FSS (Field Sync Signal) boundaries
+    fss_f1_s_p   : in  std_logic_vector(9 downto 0) := (others => '0');
+    fss_f1_e_p   : in  std_logic_vector(9 downto 0) := (others => '0');
+    fss_f2_sv_p  : in  std_logic_vector(9 downto 0) := (others => '0');
+    fss_f2_sh_p  : in  std_logic_vector(9 downto 0) := (others => '0');
+    fss_f2_ev_p  : in  std_logic_vector(9 downto 0) := (others => '0');
+    fss_f2_eh_p  : in  std_logic_vector(9 downto 0) := (others => '0');
     -- Video outputs
     dac_out      : out std_logic_vector(3 downto 0);
     csync_o      : out std_logic;
@@ -69,15 +94,19 @@ end entity pal_tv_bram_lite_v2;
 architecture rtl of pal_tv_bram_lite_v2 is
 
   constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
-
-  -- PAL 625/50 interlaced V timing
-  constant V_ACT_S_F1 : integer := 25;
-  constant V_ACT_E_F1 : integer := 311;
-  constant V_ACT_S_F2 : integer := 337;
-  constant V_ACT_E_F2 : integer := 623;
-  constant V_FRAME_S  : integer := V_ACT_S_F1;
-  constant V_FRAME_E  : integer := V_ACT_E_F2;
   constant V_ACTIVE_F : integer := 288;   -- active lines per field
+
+  -- Runtime timing integers (resolved from port; falls back to generic if port = 0)
+  signal v_act_s_f1_i : integer range 0 to 624 := V_ACT_S_F1;
+  signal v_act_e_f1_i : integer range 0 to 624 := V_ACT_E_F1;
+  signal v_act_s_f2_i : integer range 0 to 624 := V_ACT_S_F2;
+  signal v_act_e_f2_i : integer range 0 to 624 := V_ACT_E_F2;
+  signal fss_f1_s_i   : integer range 0 to 624 := FSS_F1_S;
+  signal fss_f1_e_i   : integer range 0 to 624 := FSS_F1_E;
+  signal fss_f2_sv_i  : integer range 0 to 624 := FSS_F2_SV;
+  signal fss_f2_sh_i  : integer range 0 to 639 := FSS_F2_SH;
+  signal fss_f2_ev_i  : integer range 0 to 624 := FSS_F2_EV;
+  signal fss_f2_eh_i  : integer range 0 to 639 := FSS_F2_EH;
 
   -- Zone / gradient constants
   constant NUM_ZONES  : integer := 8;
@@ -178,6 +207,21 @@ begin
   sel_i <= to_integer(unsigned(sel));
 
   -- -------------------------------------------------------------------------
+  -- Runtime port resolver: port value of 0 means "use generic default"
+  -- CRIO host writes non-zero values to override at runtime without recompile
+  -- -------------------------------------------------------------------------
+  v_act_s_f1_i <= to_integer(unsigned(v_act_s_f1_p)) when unsigned(v_act_s_f1_p) /= 0 else V_ACT_S_F1;
+  v_act_e_f1_i <= to_integer(unsigned(v_act_e_f1_p)) when unsigned(v_act_e_f1_p) /= 0 else V_ACT_E_F1;
+  v_act_s_f2_i <= to_integer(unsigned(v_act_s_f2_p)) when unsigned(v_act_s_f2_p) /= 0 else V_ACT_S_F2;
+  v_act_e_f2_i <= to_integer(unsigned(v_act_e_f2_p)) when unsigned(v_act_e_f2_p) /= 0 else V_ACT_E_F2;
+  fss_f1_s_i   <= to_integer(unsigned(fss_f1_s_p))   when unsigned(fss_f1_s_p)   /= 0 else FSS_F1_S;
+  fss_f1_e_i   <= to_integer(unsigned(fss_f1_e_p))   when unsigned(fss_f1_e_p)   /= 0 else FSS_F1_E;
+  fss_f2_sv_i  <= to_integer(unsigned(fss_f2_sv_p))  when unsigned(fss_f2_sv_p)  /= 0 else FSS_F2_SV;
+  fss_f2_sh_i  <= to_integer(unsigned(fss_f2_sh_p))  when unsigned(fss_f2_sh_p)  /= 0 else FSS_F2_SH;
+  fss_f2_ev_i  <= to_integer(unsigned(fss_f2_ev_p))  when unsigned(fss_f2_ev_p)  /= 0 else FSS_F2_EV;
+  fss_f2_eh_i  <= to_integer(unsigned(fss_f2_eh_p))  when unsigned(fss_f2_eh_p)  /= 0 else FSS_F2_EH;
+
+  -- -------------------------------------------------------------------------
   -- H/V free-running counters
   -- -------------------------------------------------------------------------
   u_timing : entity work.pal_timing
@@ -195,14 +239,15 @@ begin
       V_ACT_S_F1 => V_ACT_S_F1, V_ACT_E_F1 => V_ACT_E_F1,
       V_ACT_S_F2 => V_ACT_S_F2, V_ACT_E_F2 => V_ACT_E_F2)
     port map (h_cnt => h_cnt, v_cnt => v_cnt,
-              csync => csync_s, field => field_s, active => active_s);
+              csync => csync_s, field => field_s, active => open);
 
   -- -------------------------------------------------------------------------
-  -- Active region flags
+  -- Active region flags (use runtime integer signals, not pal_csync_il active)
   -- -------------------------------------------------------------------------
-  in_f1_active  <= (v_cnt >= V_ACT_S_F1 and v_cnt <= V_ACT_E_F1);
-  in_f2_active  <= (v_cnt >= V_ACT_S_F2 and v_cnt <= V_ACT_E_F2);
+  in_f1_active  <= (v_cnt >= v_act_s_f1_i and v_cnt <= v_act_e_f1_i);
+  in_f2_active  <= (v_cnt >= v_act_s_f2_i and v_cnt <= v_act_e_f2_i);
   in_any_active <= in_f1_active or in_f2_active;
+  active_s      <= '1' when in_any_active and h_cnt >= H_ACT_S else '0';
 
   -- -------------------------------------------------------------------------
   -- Vertical bar generator
@@ -239,7 +284,7 @@ begin
       if rst = '1' then
         zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
       elsif ce_s = '1' then
-        if (v_cnt = V_FRAME_S - 1 or v_cnt = V_ACT_S_F2 - 1) and
+        if (v_cnt = v_act_s_f1_i - 1 or v_cnt = v_act_s_f2_i - 1) and
            h_cnt = H_TOTAL - 1 then
           zone_idx_h <= 0; line_in_zone <= 0; stripe_cnt_h <= 0; stripe_ph_h <= '0';
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
@@ -287,7 +332,7 @@ begin
       if rst = '1' then
         gzy_idx <= 0; gln_in <= 0;
       elsif ce_s = '1' then
-        if (v_cnt = V_FRAME_S - 1 or v_cnt = V_ACT_S_F2 - 1) and
+        if (v_cnt = v_act_s_f1_i - 1 or v_cnt = v_act_s_f2_i - 1) and
            h_cnt = H_TOTAL - 1 then
           gzy_idx <= 0; gln_in <= 0;
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
@@ -330,7 +375,7 @@ begin
       if rst = '1' then
         gbzy_idx <= 0; gbln_in <= 0;
       elsif ce_s = '1' then
-        if (v_cnt = V_FRAME_S - 1 or v_cnt = V_ACT_S_F2 - 1) and
+        if (v_cnt = v_act_s_f1_i - 1 or v_cnt = v_act_s_f2_i - 1) and
            h_cnt = H_TOTAL - 1 then
           gbzy_idx <= 0; gbln_in <= 0;
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
@@ -373,9 +418,9 @@ begin
       if rst = '1' then
         bram_rd_line_base <= 0; bram_px_cnt <= 0;
       elsif ce_s = '1' then
-        if v_cnt = V_FRAME_S - 1 and h_cnt = H_TOTAL - 1 then
+        if v_cnt = v_act_s_f1_i - 1 and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= 0; bram_px_cnt <= 0;
-        elsif v_cnt = V_ACT_S_F2 - 1 and h_cnt = H_TOTAL - 1 then
+        elsif v_cnt = v_act_s_f2_i - 1 and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= H_ACTIVE; bram_px_cnt <= 0;
         elsif in_any_active and h_cnt = H_TOTAL - 1 then
           bram_rd_line_base <= bram_rd_line_base + 2 * H_ACTIVE;
@@ -496,13 +541,12 @@ begin
 
   frame_sync_s <= '1' when v_cnt <= 7 else '0';   -- 25 Hz, F1 start only
 
-  -- FSS: broad-sync + post-equalising only (excludes pre-eq lines 0-2 / 312-314)
-  -- F1: lines 3-7 (line-level, already correct)
-  -- F2: starts at v_cnt=315 h>=320 (last half of scope line 314) to match old tester
-  fss_s <= '1' when (v_cnt >= 3 and v_cnt <= 7) or
-                    (v_cnt = 315 and h_cnt >= 320) or
-                    (v_cnt >= 316 and v_cnt <= 319) or
-                    (v_cnt = 320 and h_cnt < 320)
+  -- FSS: runtime-configurable via fss_f*_* ports (CRIO writes these at runtime)
+  -- Defaults: F1 v=3-7, F2 v=315 h>=320 to v=320 h<320 (matches old tester)
+  fss_s <= '1' when (v_cnt >= fss_f1_s_i and v_cnt <= fss_f1_e_i) or
+                    (v_cnt = fss_f2_sv_i and h_cnt >= fss_f2_sh_i) or
+                    (v_cnt > fss_f2_sv_i and v_cnt < fss_f2_ev_i) or
+                    (v_cnt = fss_f2_ev_i and h_cnt < fss_f2_eh_i)
            else '0';
 
   csync_o      <= csync_s;
