@@ -26,91 +26,126 @@ V_ACT_E_F1  = 311          # F1 active end   (v_cnt)
 V_ACT_S_F2  = 337          # F2 active start (v_cnt)
 V_ACT_E_F2  = 623          # F2 active end   (v_cnt)
 
+# F1 sync region (v_cnt 0-7)
 FSS_F1_S    = 3            # FSS F1 start (v_cnt)
 FSS_F1_E    = 7            # FSS F1 end   (v_cnt)
+
+# F2 sync region (half-line offset — starts at 2nd half of v_cnt=312)
+# Pre-eq:  v_cnt=312 2nd half, v_cnt=313 full, v_cnt=314 full
+# Broad:   v_cnt=315 full,     v_cnt=316 full,  v_cnt=317 1st half
+# Post-eq: v_cnt=317 2nd half, v_cnt=318 full,  v_cnt=319 full
+FSS_F2_SV   = 315          # FSS F2 starts at this v_cnt, h >= FSS_F2_SH
+FSS_F2_SH   = 320          # FSS F2 h_cnt start (2nd half of scope line 316)
+FSS_F2_EV   = 320          # FSS F2 ends at this v_cnt, h < FSS_F2_EH
+FSS_F2_EH   = 320          # FSS F2 h_cnt end   (1st half of scope line 321)
 
 LS_FRONT    = 16           # H-sync starts at h_cnt=16
 LS_WIDTH    = 47           # H-sync width 47 pixels → ends at h_cnt=62
 
 
 def classify_line(v: int) -> dict:
-    """Classify all PAL signals for v_cnt=v.
+    """Classify all PAL signals for v_cnt=v (0-based).
 
-    PAL half-line structure per region:
-      Pre-eq  v_cnt 0,1 : 2 narrow pulses per line (at h=0 and h=320) → Full
-      Pre-eq  v_cnt 2   : 1 narrow pulse in 1st half only              → 1st Half
-      Broad   v_cnt 2   : 1 wide   pulse in 2nd half only              → 2nd Half
-      Broad   v_cnt 3,4 : 2 wide   pulses per line (at h=0 and h=320) → Full
-      Post-eq v_cnt 5,6 : 2 narrow pulses per line (at h=0 and h=320) → Full
-      Post-eq v_cnt 7   : 1 narrow pulse in 1st half only              → 1st Half
+    F1 sync (v_cnt 0-7, starts at h=0 of v_cnt=0):
+      Pre-eq  v=0,1 : Full  (pulse at h=0  AND h=320 each line)
+      Pre-eq  v=2   : 1st Half  (5th pre-eq pulse, 1st half only)
+      Broad   v=2   : 2nd Half  (1st broad pulse, 2nd half only)
+      Broad   v=3,4 : Full
+      Post-eq v=5,6 : Full
+      Post-eq v=7   : 1st Half  (5th post-eq pulse, 1st half only)
 
-      LS (H-sync) present on all lines EXCEPT v_cnt 0-7 (special pulses replace it).
-      H-sync is a narrow pulse at h_cnt=16..62 → always 1st Half when present.
+    F2 sync (v_cnt 312-319, starts at h=320 of v_cnt=312 — half-line offset):
+      Pre-eq  v=312 : 2nd Half  (1st pre-eq pulse, 2nd half only)
+      Pre-eq  v=313,314 : Full
+      Broad   v=315,316 : Full
+      Broad   v=317 : 1st Half  (5th broad pulse, 1st half only)
+      Post-eq v=317 : 2nd Half  (1st post-eq pulse, 2nd half only)
+      Post-eq v=318,319 : Full
 
-      FSS: VHDL plain range check v_cnt 3..7 → Full for those lines.
+    FSS F2 (VHDL: v=315 h>=320, v=316-319 full, v=320 h<320):
+      v=315 : 2nd Half
+      v=316-319 : Full
+      v=320 : 1st Half
 
-      CB (Composite Blank):
-        VBI lines : asserted for entire line     → Full
-        Active    : asserted during H-blank only (h_cnt 0..119) → 1st Half
-
-      Video (active picture, starts at h_cnt=120):
-        Active lines : h_cnt 120..639 crosses midpoint → Full
-        VBI lines    : NA
-
-      Blank (is this line a VBI/blank line?):
-        VBI lines    : Full
-        Active lines : NA
+    LS absent during all special-pulse lines (F1: v=0-7, F2: v=313-319).
+    v=312 is a mixed line: normal H-sync in 1st half, pre-eq pulse in 2nd half.
     """
-    in_f1 = (V_ACT_S_F1 <= v <= V_ACT_E_F1)
-    in_f2 = (V_ACT_S_F2 <= v <= V_ACT_E_F2)
+    in_f1     = (V_ACT_S_F1 <= v <= V_ACT_E_F1)
+    in_f2     = (V_ACT_S_F2 <= v <= V_ACT_E_F2)
     in_active = in_f1 or in_f2
 
-    # LS
-    if v <= 7:
+    # ---- LS ------------------------------------------------------------------
+    # F1 sync region: v=0..7  → NA (special pulses replace H-sync)
+    # F2 mixed line:  v=312   → 1st Half (H-sync still fires in 1st half)
+    # F2 sync region: v=313..319 → NA (special pulses in both halves)
+    # All other lines (incl. v=320+) → 1st Half
+    if v <= 7 or (313 <= v <= 319):
         ls = 'NA'
     else:
-        ls = '1st Half'          # H-sync at h_cnt 16..62, always 1st half
+        ls = '1st Half'
 
-    # FSS
+    # ---- FSS -----------------------------------------------------------------
+    # F1: plain range v=3..7 → Full
+    # F2: v=315 2nd half, v=316-319 full, v=320 1st half (matches VHDL h_cnt conditions)
     if FSS_F1_S <= v <= FSS_F1_E:
         fss = 'Full'
+    elif v == FSS_F2_SV:          # v=315, FSS starts at h>=320 → 2nd Half
+        fss = '2nd Half'
+    elif FSS_F2_SV < v < FSS_F2_EV:   # v=316..319 → Full
+        fss = 'Full'
+    elif v == FSS_F2_EV:          # v=320, FSS active for h<320 → 1st Half
+        fss = '1st Half'
     else:
         fss = 'NA'
 
-    # CB
-    if in_active:
-        cb = '1st Half'          # H-blank h_cnt 0..119 only
-    else:
-        cb = 'Full'              # entire VBI line is blanked
+    # ---- CB ------------------------------------------------------------------
+    cb = '1st Half' if in_active else 'Full'
 
-    # Video
+    # ---- Video ---------------------------------------------------------------
     video = 'Full' if in_active else 'NA'
-    # (active picture spans h_cnt 120..639, crosses midpoint 320 → both halves)
 
-    # Blank
+    # ---- Blank ---------------------------------------------------------------
     blank = 'NA' if in_active else 'Full'
 
-    # Pre-equalising
+    # ---- Pre-equalising ------------------------------------------------------
+    # F1: v=0,1 → Full;  v=2 → 1st Half
+    # F2: v=312 → 2nd Half;  v=313,314 → Full
     if v == 0 or v == 1:
-        pre = 'Full'             # pulse at h=0 AND pulse at h=320
+        pre = 'Full'
     elif v == 2:
-        pre = '1st Half'         # 5th (final) pre-eq pulse in 1st half only
+        pre = '1st Half'
+    elif v == 312:
+        pre = '2nd Half'
+    elif v == 313 or v == 314:
+        pre = 'Full'
     else:
         pre = 'NA'
 
-    # Broad sync
+    # ---- Broad sync ----------------------------------------------------------
+    # F1: v=2 → 2nd Half;  v=3,4 → Full
+    # F2: v=315,316 → Full;  v=317 → 1st Half
     if v == 2:
-        broad = '2nd Half'       # 1st broad pulse starts at h=320
+        broad = '2nd Half'
     elif v == 3 or v == 4:
-        broad = 'Full'           # pulse at h=0 AND pulse at h=320
+        broad = 'Full'
+    elif v == 315 or v == 316:
+        broad = 'Full'
+    elif v == 317:
+        broad = '1st Half'
     else:
         broad = 'NA'
 
-    # Post-equalising
+    # ---- Post-equalising -----------------------------------------------------
+    # F1: v=5,6 → Full;  v=7 → 1st Half
+    # F2: v=317 → 2nd Half;  v=318,319 → Full
     if v == 5 or v == 6:
-        post = 'Full'            # pulse at h=0 AND pulse at h=320
+        post = 'Full'
     elif v == 7:
-        post = '1st Half'        # 5th (final) post-eq pulse in 1st half only
+        post = '1st Half'
+    elif v == 317:
+        post = '2nd Half'
+    elif v == 318 or v == 319:
+        post = 'Full'
     else:
         post = 'NA'
 
@@ -131,11 +166,11 @@ def classify_line(v: int) -> dict:
 # Scope lines to include
 # ---------------------------------------------------------------------------
 scope_lines = (
-    list(range(1, 26))          +   # scope lines 1-25  (full VBI + first active transition)
-    [26, 27, 28, 29]            +   # first active F1 lines
-    [311, 312, 313, 314]        +   # end of F1 active → F2 VBI
-    [337, 338, 339, 340]        +   # start of F2 active
-    [623, 624, 625]                 # end of frame
+    list(range(1, 26))              +   # scope lines 1-25  (F1 VBI sync + blank)
+    [26, 27, 28, 29]                +   # first active F1 lines
+    list(range(311, 322))           +   # end F1 active → full F2 sync region (311-321)
+    [337, 338, 339, 340]            +   # start of F2 active
+    [623, 624, 625]                     # end of frame
 )
 
 
@@ -156,12 +191,20 @@ C_HDR_FG  = 'FFFFFF'
 
 
 def row_bg(v: int) -> str:
+    # F1 sync region
     if v <= 1:                          return C_PRE
-    if v == 2:                          return C_BROAD   # mixed line, use broad colour
+    if v == 2:                          return C_BROAD   # mixed: pre 1st half, broad 2nd half
     if v == 3 or v == 4:               return C_BROAD
     if 5 <= v <= 7:                    return C_POST
+    # Active video
     if V_ACT_S_F1 <= v <= V_ACT_E_F1: return C_ACTIVE
     if V_ACT_S_F2 <= v <= V_ACT_E_F2: return C_ACTIVE
+    # F2 sync region (half-line offset: starts at 2nd half of v=312)
+    if v == 312:                        return C_BROAD   # mixed: LS 1st half, pre 2nd half
+    if v == 313 or v == 314:           return C_PRE
+    if v == 315 or v == 316:           return C_BROAD
+    if v == 317:                        return C_POST    # mixed: broad 1st, post 2nd
+    if v == 318 or v == 319:           return C_POST
     return C_BLANK
 
 
