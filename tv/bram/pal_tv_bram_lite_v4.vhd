@@ -40,11 +40,11 @@ entity pal_tv_bram_lite_v4 is
     CLK_MHZ    : integer := 40;
     STRIPE_W   : integer := 4;
     BRAM_DEPTH : integer := 299520;
-    -- Active video / composite blank boundaries (override without recompile)
-    V_ACT_S_F1 : integer := 25;
-    V_ACT_E_F1 : integer := 311;
-    V_ACT_S_F2 : integer := 337;
-    V_ACT_E_F2 : integer := 623;
+    -- Active video / composite blank boundaries (PAL standard: F1=lines 23-310, F2=lines 336-623)
+    V_ACT_S_F1 : integer := 22;
+    V_ACT_E_F1 : integer := 309;
+    V_ACT_S_F2 : integer := 335;
+    V_ACT_E_F2 : integer := 622;
     -- FSS boundaries (Field Sync Signal, override without recompile)
     FSS_F1_S   : integer := 3;    -- F1 FSS start v_cnt
     FSS_F1_E   : integer := 7;    -- F1 FSS end v_cnt
