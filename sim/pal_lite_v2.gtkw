@@ -1,0 +1,34 @@
+[dumpfile] "pal_lite_v2.vcd"
+[dumpfile_mtime] "Thu Jan  1 00:00:00 1970"
+[dumpfile_size] 13000000
+[savefile] "pal_lite_v2.gtkw"
+[timestart] 0
+[size] 1600 900
+[pos] -1 -1
+*-23.899170 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_lite_v2_vcd.
+[treeopen] tb_lite_v2_vcd.uut.
+@28
+tb_lite_v2_vcd.clk
+@8
+tb_lite_v2_vcd.rst
+@28
+-PAL Video Outputs
+@28
+tb_lite_v2_vcd.uut.csync_o
+tb_lite_v2_vcd.uut.active_o
+tb_lite_v2_vcd.uut.fss_o
+tb_lite_v2_vcd.uut.frame_sync_o
+tb_lite_v2_vcd.uut.blank_o
+tb_lite_v2_vcd.uut.field_o
+tb_lite_v2_vcd.uut.line_sync_o
+@28
+-DAC Output
+@22
+tb_lite_v2_vcd.uut.dac_out[3:0]
+@28
+-Internal Counters
+tb_lite_v2_vcd.uut.timing_inst.h
+tb_lite_v2_vcd.uut.timing_inst.v
+[pattern_trace] 1
+[pattern_trace] 0
