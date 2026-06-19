@@ -71,9 +71,9 @@ architecture rtl of pal_tv_bram_lite_v2 is
   constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
 
   -- PAL 625/50 interlaced V timing
-  constant V_ACT_S_F1 : integer := 24;
+  constant V_ACT_S_F1 : integer := 25;
   constant V_ACT_E_F1 : integer := 311;
-  constant V_ACT_S_F2 : integer := 336;
+  constant V_ACT_S_F2 : integer := 337;
   constant V_ACT_E_F2 : integer := 623;
   constant V_FRAME_S  : integer := V_ACT_S_F1;
   constant V_FRAME_E  : integer := V_ACT_E_F2;
@@ -497,8 +497,12 @@ begin
   frame_sync_s <= '1' when v_cnt <= 7 else '0';   -- 25 Hz, F1 start only
 
   -- FSS: broad-sync + post-equalising only (excludes pre-eq lines 0-2 / 312-314)
+  -- F1: lines 3-7 (line-level, already correct)
+  -- F2: starts at v_cnt=315 h>=320 (last half of scope line 314) to match old tester
   fss_s <= '1' when (v_cnt >= 3 and v_cnt <= 7) or
-                    (v_cnt >= 315 and v_cnt <= 319)
+                    (v_cnt = 315 and h_cnt >= 320) or
+                    (v_cnt >= 316 and v_cnt <= 319) or
+                    (v_cnt = 320 and h_cnt < 320)
            else '0';
 
   csync_o      <= csync_s;
