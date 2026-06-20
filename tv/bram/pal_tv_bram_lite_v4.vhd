@@ -93,7 +93,8 @@ end entity pal_tv_bram_lite_v4;
 
 architecture rtl of pal_tv_bram_lite_v4 is
 
-  constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
+  constant H_ACT_S      : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
+  constant H_ACT_S_L23  : integer := 448;  -- scope line 23 only: 70% blank, 30% video
   constant V_ACTIVE_F : integer := 288;   -- active lines per field
 
   -- Runtime timing integers (resolved from port; falls back to generic if port = 0)
@@ -247,7 +248,10 @@ begin
   in_f1_active  <= (v_cnt >= v_act_s_f1_i and v_cnt <= v_act_e_f1_i);
   in_f2_active  <= (v_cnt >= v_act_s_f2_i and v_cnt <= v_act_e_f2_i);
   in_any_active <= in_f1_active or in_f2_active;
-  active_s      <= '1' when in_any_active and h_cnt >= H_ACT_S else '0';
+  active_s      <= '1' when in_any_active and
+                            ((v_cnt = v_act_s_f1_i and h_cnt >= H_ACT_S_L23) or
+                             (v_cnt /= v_act_s_f1_i and h_cnt >= H_ACT_S))
+                            else '0';
 
   -- -------------------------------------------------------------------------
   -- Vertical bar generator

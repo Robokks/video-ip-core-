@@ -56,7 +56,7 @@ begin
     -- Pixel (V,H) in frame 2 is at absolute cycle: 5 + V_TOTAL*H_TOTAL + V*H_TOTAL + H
     constant BASE : integer := 5 + V_TOTAL * H_TOTAL;
     constant P1 : integer := BASE + 21  * H_TOTAL + 200;
-    constant P2 : integer := BASE + 22  * H_TOTAL + 120;
+    constant P2 : integer := BASE + 22  * H_TOTAL + 450;  -- h=450 > H_ACT_S_L23=448
     constant P3 : integer := BASE + 309 * H_TOTAL + 400;
     constant P4 : integer := BASE + 310 * H_TOTAL + 200;
     constant P5 : integer := BASE + 334 * H_TOTAL + 200;
