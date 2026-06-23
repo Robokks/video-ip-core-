@@ -54,16 +54,15 @@ begin
   process
     -- All checks in frame 2 to avoid reset transients.
     -- Pixel (V,H) in frame 2 is at absolute cycle: 5 + V_TOTAL*H_TOTAL + V*H_TOTAL + H
-    constant BASE  : integer := 5 + V_TOTAL * H_TOTAL;
-    constant BASE2 : integer := 5 + 2 * V_TOTAL * H_TOTAL;
-    constant P1 : integer := BASE  + 21  * H_TOTAL + 200;
-    constant P2 : integer := BASE  + 25  * H_TOTAL + 449;  -- h=449 >= H_ACT_S_L23=448 (first F1 line)
-    constant P3 : integer := BASE  + 310 * H_TOTAL + 400;
-    constant P4 : integer := BASE  + 311 * H_TOTAL + 200;
-    constant P5 : integer := BASE  + 334 * H_TOTAL + 200;
-    constant P6 : integer := BASE  + 335 * H_TOTAL + 121;  -- h=121 > H_ACT_S=120
-    constant P7 : integer := BASE  + 624 * H_TOTAL + 400;
-    constant P8 : integer := BASE2 + 200;                  -- frame 3 v_cnt=0, after F2
+    constant BASE : integer := 5 + V_TOTAL * H_TOTAL;
+    constant P1 : integer := BASE + 21  * H_TOTAL + 200;
+    constant P2 : integer := BASE + 22  * H_TOTAL + 200;  -- h=200 > H_ACT_S=120
+    constant P3 : integer := BASE + 309 * H_TOTAL + 400;
+    constant P4 : integer := BASE + 310 * H_TOTAL + 200;
+    constant P5 : integer := BASE + 334 * H_TOTAL + 200;
+    constant P6 : integer := BASE + 335 * H_TOTAL + 121;  -- h=121 > H_ACT_S=120
+    constant P7 : integer := BASE + 622 * H_TOTAL + 400;
+    constant P8 : integer := BASE + 623 * H_TOTAL + 200;
   begin
     wait for CLK_PERIOD * P1;
     wait until rising_edge(clk);
@@ -77,28 +76,28 @@ begin
     wait for CLK_PERIOD * (P2 - P1);
     wait until rising_edge(clk);
     if active_o /= '1' then
-      report "FAIL: scope line 26 (v_cnt=25, h=449) NOT active - F1 must start here (H_ACT_S_L23=448)" severity error;
+      report "FAIL: scope line 23 (v_cnt=22, h=200) NOT active - F1 must start here" severity error;
       pass <= false;
     else
-      report "PASS: scope line 26 (v_cnt=25) ACTIVE at h=449 - F1 starts correctly" severity note;
+      report "PASS: scope line 23 (v_cnt=22) ACTIVE - F1 starts correctly" severity note;
     end if;
 
     wait for CLK_PERIOD * (P3 - P2);
     wait until rising_edge(clk);
     if active_o /= '1' then
-      report "FAIL: scope line 311 (v_cnt=310, h=400) NOT active - F1 last line wrong" severity error;
+      report "FAIL: scope line 310 (v_cnt=309, h=400) NOT active - F1 last line wrong" severity error;
       pass <= false;
     else
-      report "PASS: scope line 311 (v_cnt=310) ACTIVE - F1 last line correct" severity note;
+      report "PASS: scope line 310 (v_cnt=309) ACTIVE - F1 last line correct" severity note;
     end if;
 
     wait for CLK_PERIOD * (P4 - P3);
     wait until rising_edge(clk);
     if active_o = '1' then
-      report "FAIL: scope line 312 (v_cnt=311) ACTIVE - must be BLANK after F1" severity error;
+      report "FAIL: scope line 311 (v_cnt=310) ACTIVE - must be BLANK after F1" severity error;
       pass <= false;
     else
-      report "PASS: scope line 312 (v_cnt=311) is BLANK - F1 ends correctly" severity note;
+      report "PASS: scope line 311 (v_cnt=310) is BLANK - F1 ends correctly" severity note;
     end if;
 
     wait for CLK_PERIOD * (P5 - P4);
@@ -122,25 +121,25 @@ begin
     wait for CLK_PERIOD * (P7 - P6);
     wait until rising_edge(clk);
     if active_o /= '1' then
-      report "FAIL: scope line 625 (v_cnt=624, h=400) NOT active - F2 last line wrong" severity error;
+      report "FAIL: scope line 623 (v_cnt=622, h=400) NOT active - F2 last line wrong" severity error;
       pass <= false;
     else
-      report "PASS: scope line 625 (v_cnt=624) ACTIVE - F2 last line correct" severity note;
+      report "PASS: scope line 623 (v_cnt=622) ACTIVE - F2 last line correct" severity note;
     end if;
 
     wait for CLK_PERIOD * (P8 - P7);
     wait until rising_edge(clk);
     if active_o = '1' then
-      report "FAIL: frame 3 v_cnt=0 h=200 ACTIVE - must be BLANK after F2 wrap" severity error;
+      report "FAIL: scope line 624 (v_cnt=623) ACTIVE - must be BLANK after F2" severity error;
       pass <= false;
     else
-      report "PASS: frame 3 v_cnt=0 h=200 is BLANK - F2 ends and frame wraps correctly" severity note;
+      report "PASS: scope line 624 (v_cnt=623) is BLANK - F2 ends correctly" severity note;
     end if;
 
     if pass then
       report "ALL 8 CHECKS PASSED - v4 PAL timing correct" severity note;
-      report "F1: scope lines 26-311  v_cnt 25-310  = 286 lines" severity note;
-      report "F2: scope lines 336-625 v_cnt 335-624 = 290 lines" severity note;
+      report "F1: scope lines 23-310  v_cnt 22-309  = 288 lines" severity note;
+      report "F2: scope lines 336-623 v_cnt 335-622 = 288 lines" severity note;
     else
       report "ONE OR MORE CHECKS FAILED" severity error;
     end if;

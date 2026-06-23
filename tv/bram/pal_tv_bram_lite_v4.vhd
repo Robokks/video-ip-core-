@@ -40,11 +40,11 @@ entity pal_tv_bram_lite_v4 is
     CLK_MHZ    : integer := 40;
     STRIPE_W   : integer := 4;
     BRAM_DEPTH : integer := 299520;
-    -- Active video / composite blank boundaries (PAL standard: F1=scope 26-311, F2=scope 336-625)
-    V_ACT_S_F1 : integer := 25;
-    V_ACT_E_F1 : integer := 310;
+    -- Active video / composite blank boundaries (PAL standard: F1=lines 23-310, F2=lines 336-623)
+    V_ACT_S_F1 : integer := 22;
+    V_ACT_E_F1 : integer := 309;
     V_ACT_S_F2 : integer := 335;
-    V_ACT_E_F2 : integer := 624;
+    V_ACT_E_F2 : integer := 622;
     -- FSS boundaries (Field Sync Signal, override without recompile)
     FSS_F1_S   : integer := 3;    -- F1 FSS start v_cnt
     FSS_F1_E   : integer := 7;    -- F1 FSS end v_cnt
@@ -93,8 +93,7 @@ end entity pal_tv_bram_lite_v4;
 
 architecture rtl of pal_tv_bram_lite_v4 is
 
-  constant H_ACT_S      : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
-  constant H_ACT_S_L23  : integer := 448;  -- scope line 23 only: 70% blank, 30% video
+  constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
   constant V_ACTIVE_F : integer := 288;   -- active lines per field
 
   -- Runtime timing integers (resolved from port; falls back to generic if port = 0)
@@ -248,10 +247,7 @@ begin
   in_f1_active  <= (v_cnt >= v_act_s_f1_i and v_cnt <= v_act_e_f1_i);
   in_f2_active  <= (v_cnt >= v_act_s_f2_i and v_cnt <= v_act_e_f2_i);
   in_any_active <= in_f1_active or in_f2_active;
-  active_s      <= '1' when in_any_active and
-                            ((v_cnt = v_act_s_f1_i and h_cnt >= H_ACT_S_L23) or
-                             (v_cnt /= v_act_s_f1_i and h_cnt >= H_ACT_S))
-                            else '0';
+  active_s      <= '1' when in_any_active and h_cnt >= H_ACT_S else '0';
 
   -- -------------------------------------------------------------------------
   -- Vertical bar generator
