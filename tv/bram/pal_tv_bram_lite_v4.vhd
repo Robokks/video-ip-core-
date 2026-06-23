@@ -93,8 +93,7 @@ end entity pal_tv_bram_lite_v4;
 
 architecture rtl of pal_tv_bram_lite_v4 is
 
-  constant H_ACT_S      : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
-  constant H_ACT_S_L23  : integer := 448;  -- scope line 23 only: 70% blank, 30% video
+  constant H_ACT_S    : integer := H_FRONT + H_SYNC_W + H_BACK;  -- 120
   constant V_ACTIVE_F : integer := 288;   -- active lines per field
 
   -- Runtime timing integers (resolved from port; falls back to generic if port = 0)
@@ -248,10 +247,7 @@ begin
   in_f1_active  <= (v_cnt >= v_act_s_f1_i and v_cnt <= v_act_e_f1_i);
   in_f2_active  <= (v_cnt >= v_act_s_f2_i and v_cnt <= v_act_e_f2_i);
   in_any_active <= in_f1_active or in_f2_active;
-  active_s      <= '1' when in_any_active and
-                            ((v_cnt = v_act_s_f1_i and h_cnt >= H_ACT_S_L23) or
-                             (v_cnt /= v_act_s_f1_i and h_cnt >= H_ACT_S))
-                            else '0';
+  active_s      <= '1' when in_any_active and h_cnt >= H_ACT_S else '0';
 
   -- -------------------------------------------------------------------------
   -- Vertical bar generator
@@ -539,18 +535,17 @@ begin
                 else '0';
 
   line_sync_s  <= '1' when h_cnt >= H_FRONT and
-                            h_cnt < H_FRONT + H_SYNC_W and
-                            in_vsync_s = '0'
+                            h_cnt < H_FRONT + H_SYNC_W
                   else '0';
 
   frame_sync_s <= '1' when v_cnt <= 7 else '0';   -- 25 Hz, F1 start only
 
   -- FSS: runtime-configurable via fss_f*_* ports (CRIO writes these at runtime)
   -- Defaults: F1 v=3-7, F2 v=315 h>=320 to v=320 h<320
-  fss_s <= '1' when (v_cnt >= fss_f1_s_i and v_cnt <= fss_f1_e_i) or
-                    (v_cnt = fss_f2_sv_i and h_cnt >= fss_f2_sh_i) or
-                    (v_cnt > fss_f2_sv_i and v_cnt < fss_f2_ev_i) or
-                    (v_cnt = fss_f2_ev_i and h_cnt < fss_f2_eh_i)
+  fss_s <= '1' when (v_cnt >= 3 and v_cnt <= 6) or
+                    (v_cnt = 2 and h_cnt >= 320) or
+                    (v_cnt >= 315 and v_cnt <= 319) or
+                    (v_cnt = 7 and h_cnt < 320)
            else '0';
 
   csync_o      <= csync_s;
